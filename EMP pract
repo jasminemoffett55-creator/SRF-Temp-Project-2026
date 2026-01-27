@@ -1,0 +1,8 @@
+#Lesson goals:
+
+#0. Load packages
+#1. Open a cleaned dataset
+#2. Understand key columns (timestamp, location, variables)
+#3. Filter by site + date window
+#4. Make 3 core plots (time series, faceted site plots, diel pattern)
+#5. Export plots
