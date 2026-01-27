@@ -6,3 +6,17 @@
 #3. Filter by site + date window
 #4. Make 3 core plots (time series, faceted site plots, diel pattern)
 #5. Export plots
+
+
+###0. Install and load packages
+
+#Load necesary packages. This lesson will use tidyverse, lubridate, and janitor.
+
+#A. You will need to install these packages first.
+install.packages(c("tidyverse", "lubridate", "janitor"))
+
+#B. Now call them in:
+library(tidyverse)
+library(lubridate)
+library(janitor)
+
