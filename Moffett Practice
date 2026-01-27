@@ -1,1 +1,9 @@
+#Lesson goals:
+
+#0. Load packages - packages of the specific languages you want
+#1. Open a cleaned dataset - have github read in data, tell it what to name files -clean names- and where they live
+#2. Understand key columns (timestamp, location, variables)
+#3. Filter by site + date window
+#4. Make 3 core plots 
+#5. Export plots
 
