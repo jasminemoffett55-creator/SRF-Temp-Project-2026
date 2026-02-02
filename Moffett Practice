@@ -7,3 +7,74 @@
 #4. Make 3 core plots 
 #5. Export plots
 
+#start of lesson; following AO's instructions on Github in "ScottCreek_HistoricWaterQualityData"
+
+
+
+###0. Install and load packages
+
+#Load the lesson's necessary packages; for this lesson we will use tidyverse, lubridate, and janitor.
+
+#A. you will need to install these packages first; to do so, write install.packages(c("insert package name here")
+install.packages(c("tidyverse", "lubridate", "janitor"))
+
+#8. Now call them in:
+library(tidyverse)
+library(lubridate)
+library(janitor)
+
+#NOTE: you can skip step A in the future once you have installed the packages
+
+
+
+##1. load in dataset
+
+#We want to load in a single csv file named "WQ2015_clean.csv" (which is currently on my desktop in the "temp_data" folder and under "data")
+#There are many ways to load in the data, for this lesson, we will use this command-
+#      ChosenDataSetName <- read_csv("Your/File/Path/Is/Copmuter/Specific/YourFileName.csv")
+
+#Let's name our dataset "WQ2015"
+#On AO's computer, the filepath to her .csv is "/Users/alexia.olsen/Desktop/temp_data/data/output/WQ2015_clean.csv") 
+
+# Following the template, mine might be "/Users/jasmine.moffett/Desktop/temp_data/data/output/WQ2015_clean.csv"; "output" was included bc it acts as a divider between your raw ingredients and finsihed product; it directs results to a /output/ folder so that /data/ file stays unchanged
+# So, I will use the command-
+
+WQ2015<-read_csv("/Users/jasmine.moffett/Desktop/temp_data/data/output/WQ2015_clean.csv")
+
+#Check it read using glimpse
+glimpse(WQ2015)
+
+
+
+
+#Says my file path is wrong, need to fix before I can proceed so that R can read my data 
+#Gemini is currently unable to help me
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
