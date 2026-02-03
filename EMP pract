@@ -1,22 +1,127 @@
-#Lesson goals:
+#set directory 
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
 
-#0. Load packages
-#1. Open a cleaned dataset
-#2. Understand key columns (timestamp, location, variables)
-#3. Filter by site + date window
-#4. Make 3 core plots (time series, faceted site plots, diel pattern)
-#5. Export plots
+#install packages
+ install.packages(c("tidyverse", "lubridate", "janitor"))
+ 
+ 
+ #call in packages
+  library(tidyverse)
+  library(lubridate)
+  library(janitor)
+ 
+ 
+#name data set/load it in 
+  WQ2015 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2015_clean.csv")
+  
+  
+#check to make sure it worked
+  glimpse(WQ2015)
+
+#exmaine imported data column names 
+  colnames(WQ2015)
+
+#clean up data col names to standardize them and rename it the same thing
+  WQ2015 <- WQ2015 %>% #%>% = also run the next line 
+    clean_names()
+#checkc to make sure it worked 
+  colnames(WQ2015)
+  
+  
+#filter to get subset of data (only big creek)
+  big_creek <- WQ2015 %>% filter(location == "Big Creek") #new dataframe called big_creek is subset of entire dataset filtered only to big creek
+  head(big_creek) #check to make sure it worked but just the head lines 
+  
+  
+  #filter to get subset of data (only nov)
+bigcreek_nov <- WQ2015 %>% 
+  filter(location == "Big Creek") %>% #redo the time subsample to apply it to this new subset
+  filter(timestamp >= as.POSIXct("2015-11-01", tz="America/Los_Angeles"), #only get nov 2015
+         timestamp < as.POSIXct("2015-11-30", tz="America/Los_Angeles"))
+  head(bigcreek_nov) #check to make sure it works 
+  
+#make graph of subset of data
+  ggplot(bigcreek_nov, aes(timestamp, temperature_c))+ #make the graph 
+    geom_line(color = "salmon", linewidth = 0.5)+
+    theme_minimal() +
+    labs(title= "Big Creek Temperature (Nov 2015)",
+         x = "Date", y= "Temperature (°C)")
+  
+  
+  
+#make the same graph but color the line by hour data was recorded
+bigcreek_nov %>% 
+  mutate(hour = lubridate::hour(timestamp)) %>% 
+  ggplot(aes(timestamp, temperature_c, color= hour))+
+  geom_line(linewidth= 0.5)+
+  scale_colour_viridis_c() +
+  theme_minimal() +
+  labs(title= "Big Creek Temperature Colored by Hour of Day",
+       x = "Date", y= "Temperature (°C)", color = "Hour")
+
+#add a trend line 
+ggplot(bigcreek_nov, aes(timestamp, temperature_c)) + #aes= aesthetics = x axis, y axis, color, size, line type
+  geom_line(color = "gray70", linewidth = 0.4)+
+  geom_smooth(color= "blue", se= FALSE) + #this makes the trend line without the standard error shading 
+  theme_minimal()+
+  labs(title= "Big Creek Temperature with Trend", 
+       x = "Date", y= "Temperature (°C)")
+  
+#make plot with facet by location --> temporarily take data out of main dataset and then graph it
+
+temp_nov_plot <- WQ2015 %>% #name plot and then define it 
+  filter(timestamp >= as.POSIXct("2015-11-01", tz= "America/Los_Angeles"), #taking data between these 2 dates
+         timestamp < as.POSIXct("2015-11-30", tz= "America/Los_Angeles")) %>%
+  ggplot(aes(timestamp, temperature_c, color= location)) + #our variables
+  geom_line(linewidth = 0.4) +
+  facet_wrap(~ location, scales = "free_y") + #we want the data to be faceted by location --> this means that each location in the dataset gets its own plot
+  theme_minimal()+ 
+  labs(title= "Temperature by Site (Nov 2015)",
+       x= "Date", y= "Temperature (°C)",
+       color = "Site")
+
+temp_nov_plot #call in plot to make sure it worked 
+  
+#now we make a subset caleld "bigcreek_diel" that contains temperature variable summarized as mean temperature and grouped by hour.  
+bigcreek_diel <- WQ2015 %>% #name this new dataset 
+  filter (location == "Big Creek") %>% #it will be made of subset of data determined by location
+  mutate(hour = hour(timestamp)) %>% #mutate adds new columns/modifies old ones but doesnt change data, this says to add a new column called hour
+  group_by(hour) %>% #group the data in a new column called hour
+  summarize(temperature_mean = mean(temperature_c, na.rm = TRUE), .groups = "drop" ) #for each hour, calc the mean temp and create summarized dataset
+         
+#graph this diel pattern 
+ggplot(bigcreek_diel, aes(hour, temperature_mean)) + #this maeks a grpah wherer each point is the mean of that hour for the entire yr, this grpah shows the entire year as a single day
+  geom_line(color = "salmon", linewidth = 0.4) + 
+  geom_point() + 
+  theme_minimal() + 
+  labs(title= "Big Creek Mean Temp by Hour of Day (2015)", 
+       x = "Hour of Day", y="Temperature (°C)")
 
 
-###0. Install and load packages
+#save plots 
 
-#Load necesary packages. This lesson will use tidyverse, lubridate, and janitor.
+getwd()  #check where the working directory is 
 
-#A. You will need to install these packages first.
-install.packages(c("tidyverse", "lubridate", "janitor"))
+ggsave(
+  filename = "lessonplots/temperature_by_site_nov2015.png", #what we want it to be called 
+  plot= temp_nov_plot, 
+  width = 12,
+  height= 6, 
+  dpi = 300 
+)
+  
+#save dataset as csv
+write_csv(
+  bigcreek_nov,
+  "/Users/eliza.pease/Desktop/temp_data/data/bigcreek_nov2015.csv"
+)
 
-#B. Now call them in:
-library(tidyverse)
-library(lubridate)
-library(janitor)
+#save dataset as excel file 
+install.packages(c("writexl"))
+library(writexl)
 
+writexl::write_xlsx(
+  bigcreek_nov, 
+  "/Users/eliza.pease/Desktop/temp_data/data/bigcreek_nov2015.xlsx"
+  
+)
