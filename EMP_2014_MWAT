@@ -1,1 +1,80 @@
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
 
+#install packages
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "dplyr", "zoo"))
+
+
+#call in packages
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(zoo)
+
+
+#read in csv and take a look at it 
+WQ2014 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2014_clean_FINAL.csv")
+glimpse(WQ2014)
+
+
+# temperature (Â°C) --> this is the name of the temp col in the csv file 
+
+
+
+#clean col names to make it easier to work with 
+WQ2014 <- WQ2014 %>%
+  clean_names()
+names(WQ2014) #see what all the colnames are
+
+
+WQ2014 <- WQ2014 %>%
+ mutate(datetime = mdy_hms(timestamp)) #tell r that datetime is a timestamp and not a numeric variable, this makes a column inside wq2014 uisng values from timestamp col and calling it datetime
+
+
+WQ2014<-WQ2014 %>% #only keep rows where datetime is not missing 
+  filter(!is.na(datetime)) 
+
+summary(WQ2014$datetime) #make sure it has values for datetime varibales 
+
+
+
+#calc mean temp values 
+daily_temp <- WQ2014 %>%  #creating new dataframe which is daily_temp using wq2014 and...
+  mutate(date = as.Date(datetime)) %>%   # extract just the day
+  group_by(date) %>% #group temp values by date
+  summarise(
+    daily_mean_temp = mean(temperature_c, na.rm = TRUE) #ignore missing temp readings and calc mean 
+  ) %>%
+  ungroup() #this avoids grouping things on accident later on, should use ungroup() after summarise() unless you want the group for all further operations 
+
+
+
+#calc MWAT
+daily_temp <- daily_temp %>% #add following code to daily temp dataframe
+  arrange(date) %>% #sort daily temp in chronological order from earliest to latest date
+  mutate( #any new column crewated with mutate is a col in dataframe 
+    rolling_7d_mean= rollapply( #create new column in dailytemp called rolling_7d_mean which calculates 7 day rolling mean
+      daily_mean_temp, #using the daily-meantemp
+      width= 7, #7 days
+      FUN = mean, #take the mean
+      align = "right", #avg ends on current day 
+      fill = NA, # put NA in rows where rolling avg cannot be computed due to lack of 7 previous days
+      na.rm= TRUE #ignore missing temp values 
+    )
+  )
+
+MWAT <- max(daily_temp$rolling_7d_mean, na.rm = TRUE) #assign var MWAT to previous function
+MWAT #print MWAT
+
+library(ggplot2)
+
+ ggplot(daily_temp, aes(x= date)) + #sets up plot using dataframe daily_temp with horiz axis being date
+   geom_line(aes(y= daily_mean_temp), color = "blue", alpha = 0.5) + #plot daily mean temp which shows mean of all temp readings for the day 
+   geom_line(aes(y=rolling_7d_mean), color = "red", size = 1) + #plot 7day rolling avg, max value along red line = MWAT
+   labs(
+     title = paste("MWAT =", round(MWAT, 2), "°C"),
+     x = "Date", 
+     y = "Temperature (°C)"
+   )
+  
