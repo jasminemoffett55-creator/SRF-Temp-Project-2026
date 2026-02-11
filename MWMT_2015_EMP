@@ -1,0 +1,71 @@
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data") #set working directory 
+
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "dplyr", "zoo"
+                   )) #install packages 
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(zoo) #read in libraries 
+
+WQ2015 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2015_clean_FINAL.csv") #read in csv
+glimpse(WQ2014) #take a look 
+
+
+WQ2015 <- WQ2015 %>%
+  clean_names() #clean up column names 
+
+names(WQ2015) #check them out 
+
+
+WQ2015 <- WQ2015 %>%
+  mutate(timestamp_str = paste(date, time_stamp)) #add new col to WQ2015 dataframe called timestamp_str which is concatination of date and time cols 
+
+WQ2015 <- WQ2015 %>%
+  mutate(
+    datetime=mdy_hms(timestamp_str) #add new col called datetime which has data from timestamp_str stored as a timestamp 
+  )
+
+
+#WQ2015 <- WQ2015 %>%
+  #filter(!is.na(datetime)) #make sure to filter out NA values, i think this was already done in this dataset
+
+summary(WQ2015$datetime) #grab summary to make sure there are no more NAs
+
+
+sum(is.na(WQ2015$datetime)) #this double checks for any missing vals 
+
+
+#calc daily max 
+daily_max_temp <- WQ2015 %>% #create new dataframe called daily_max_temp
+  mutate(date= as.Date(datetime)) %>% #add new column called date which converts datetime to date object --> drops time and only keeps date 
+  group_by(date) %>% #group temp values by date 
+  summarise(daily_max_temp = max(temperature_c, na.rm= TRUE)) %>% #ignore missing temps and just calc max temp per day
+  ungroup() #good to do after summarizing 
+
+#add week col 
+daily_max_temp <- daily_max_temp %>%
+  mutate(week = isoweek(date), year= year(date))
+
+#calc weekly mean of daily max 
+weekly_max_temp <- daily_max_temp %>% #create new dataframe called weekly_max_temp which is mean of daily max temp 
+  group_by(week) %>%  #group the data in dataframe by week 
+  summarise(weekly_mean_max= mean(daily_max_temp, na.rm=TRUE)) %>% #take the mean of the daily max and ignore NA values and call it weekly-mean_max
+  ungroup()
+
+MWMT <- max(weekly_max_temp$weekly_mean_max, na.rm= TRUE) #weekly_mean_max is a col in the weekly_max_temp dataframe
+MWMT
+
+
+ggplot(daily_max_temp, aes(x=date)) +
+  geom_line(aes(y=weekly_max_temp), color = "blue", alpha= 0.5) +
+  geom_line(aes(y=weekly_mean_max), color= "red", size = 1) +
+  labs(
+    title= paste("MWMT =", round(MWMT, 2), "°C"), 
+    x= "Date",
+    y= "Temperature (°C)"
+  )
+
+something is wrong with graph 
