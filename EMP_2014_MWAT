@@ -50,10 +50,10 @@ daily_temp <- WQ2014 %>%  #creating new dataframe which is daily_temp using wq20
 
 
 
-#calc MWAT
+#calc 7day rolling avg 
 daily_temp <- daily_temp %>% #add following code to daily temp dataframe
   arrange(date) %>% #sort daily temp in chronological order from earliest to latest date
-  mutate( #any new column crewated with mutate is a col in dataframe 
+  mutate( #create new rolling_7d_mean col in dataframe  
     rolling_7d_mean= rollapply( #create new column in dailytemp called rolling_7d_mean which calculates 7 day rolling mean
       daily_mean_temp, #using the daily-meantemp
       width= 7, #7 days
