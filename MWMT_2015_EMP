@@ -26,25 +26,34 @@ names(WQ2015)
 WQ2015<- WQ2015 %>%
   mutate(date=as.Date(date, format = "%m/%d/%Y"))
 
-#no need to create datetime col with both date and time bc we only are looking at date here, not averaging all the hours in a day 
+#no need to create datetime col with concat both date and time bc we only are looking at date here, not averaging all the hours in a day 
 
 # calc daily max 
-daily_max_temp <- WQ2015 %>%
+daily_max_temp <- WQ2015 %>% #create daily max temp col within wq2015 dataframe
   group_by(date) %>%  #group temp values by date 
   summarise(daily_max_temp= max(temperature_c, na.rm= TRUE)) %>% #calc max temp per day, ensure there are no NAs 
   ungroup()
 
-mmwt <- mean(daily_max_temp$daily_max_temp, na.rm=TRUE) #take the mean of daily max vals from within the daily max col 
+#add col to dataframe with max of 7day rolling avg 
+daily_max_temp <- daily-max_temp %>% #the muated daily_max_temp col (max_7day) will be passed into daily_max_temp dataframe
+  mutate (
+    max_7day = rollmean(daily_max_temp, k=7 , fill = NA, slign= "right") 
+  )
+
+mmwt <- mean(daily_max_temp$max_7day, na.rm=TRUE) #take the mean of daily max vals from within the max7days col 
 mmwt #print mmwt 
 
 #make graph 
-ggplot(daily_max_temp, aes(x=date, y=daily_max_temp)) + 
-  geom_line(color = "blue") +
-  geom_hline(yintercept = mmwt, color = "red", linetype = "dashed") +
+ggplot(daily_max_temp, aes(x=date)) + 
+  #geom_line(aes(y=daily_max_temp), color = "blue", alpha = 0.5) + #raw daily maxs 
+  geom_line(aes(y= daily_max_7day), color = "green",  size = 1) + #7 day rolling avg of daily maxs 
+  geom_hline(yintercept= mmwt, color = "red", linetype="dashed") + #mmwt for the entire yr 
   labs(
-    title = "Daily Max Temperature with MMWT",
+    title = "7 Day Rolling Average of Daily Maximum Temperature and MMWT",
     x = "Date",
     y= "Temperature (°C)") + theme_minimal()
   
+
+
 
 
