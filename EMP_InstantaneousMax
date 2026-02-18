@@ -1,0 +1,44 @@
+#set working directory 
+setwd("/Users/elizapease/Desktop/WaterTemp/data") 
+
+#install packages 
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "dplyr", "zoo"
+)) 
+
+#read in libraries 
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(zoo) 
+
+#read in and check csv
+WQ2015 <- read_csv("/Users/elizapease/Desktop/WaterTemp/data/WQ2015_clean_FINAL.csv")
+glimpse(WQ2015) #take a look 
+
+#clean up column names and check them out
+WQ2015 <- WQ2015 %>%
+  clean_names() 
+names(WQ2015) 
+
+#ensure date column is date object 
+WQ2015<- WQ2015 %>%
+  mutate(date=as.Date(date, format = "%m/%d/%Y"))
+
+#calc daily max 
+daily_max_temp <- WQ2015 %>%
+  group_by(date) %>%  #group temp values by date 
+  summarise(daily_max_temp= max(temperature_c, na.rm= TRUE)) %>% #calc max temp per day, ensure there are no NAs 
+  ungroup()
+
+#plot daily max value for everyday of the year 
+ggplot(daily_max_temp, aes(x=date)) + 
+  geom_line(aes(y=daily_max_temp), color = "blue", alpha = 0.5) +#raw daily maxs 
+  geom_hline(yintercept=24, color= "red", linetype= "dotted", size =1 )+ 
+  annotate("text", x= as.Date("2015-01-01"), y=24, label ="24°C", color= "red", vjust=-0.5) +
+  labs(
+    title = "Daily Instantaneous Maximum Temperature with Critical Temperature Threshold",
+    x = "Date",
+    y= "Temperature (°C)") + theme_minimal()
+
