@@ -1,0 +1,134 @@
+#there are issues bc im tring to figure out how to make it so it doesnt include ghost days in the rolling avg 
+
+
+
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
+
+#install packages
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "zoo"))
+
+
+#call in packages
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(zoo)
+library(tidyr)
+
+
+#read in csv, clean names, and set datetime
+WQ2014 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2014_clean_FINAL.csv") %>% #read in csv
+  clean_names() %>% #clean/standardize col names
+  mutate( 
+    datetime = mdy_hms(timestamp), #set datetime as timestamp 
+    location = str_trim(location) #get rid of spacing inconsistencies in location names 
+    ) 
+class(WQ2014$datetime)
+summary(WQ2014$datetime)
+
+#create complete calender for all sites (GO OVER WHAT THIS RLLY DOES)
+all_dates <- expand.grid(
+  location = c("Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek"),
+  date = seq.Date(min(as.Date(WQ2014$datetime)), max(as.Date(WQ2014$datetime)), by = "day")
+)
+
+# Calculate daily mean temperature per site
+daily_temp <- WQ2014 %>% #new dataframe called daily_temp 
+  mutate(date = as.Date(datetime)) %>% #just take the date out of datetime 
+  filter(location %in% c("Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek")) %>% #only include these sites 
+  group_by(location, date) %>% #group the sites by location and then date 
+  summarise(daily_mean_temp = mean(temperature_c, na.rm = TRUE), .groups = "drop") #take the daily mean 
+            
+            
+daily_temp_full <- all_dates %>%
+  left_join(daily_temp, by = c("location", "date")) %>%
+  arrange(location, date) %>%
+  group_by(location) %>%
+  mutate(
+    rolling_7d_mean = rollapply(
+      daily_mean_temp,
+      width = 7,
+      FUN = mean,
+      align = "right",
+      fill = NA,
+      na.rm = TRUE
+    )
+  ) %>%
+  ungroup()
+
+
+#calc MWAT for each site 
+MWAT_by_site <- daily_temp_full %>%
+  group_by(location) %>%
+  summarise(
+    MWAT_val= max(rolling_7d_mean, na.rm = TRUE), .groups = "drop") #assign var MWAT to previous function
+
+#add MWAT for plotting
+daily_temp_full <- daily_temp_full %>%
+  left_join(MWAT_by_site, by = "location") %>%
+  mutate(
+    facet_label = paste0(location, "\nMWAT = ", round(MWAT_val, 2)," °C")
+  )
+
+#verify dates for each site
+daily_temp_full %>%
+  group_by(location) %>%
+  summarise(
+    first_date = min(date, na.rm = TRUE),
+    last_date = max(date, na.rm = TRUE),
+    n_days = n(),
+    n_missing_temp = sum(is.na(daily_mean_temp)),
+    .groups = "drop"
+  )
+
+
+#WQ2014<-WQ2014 %>% #only keep rows where datetime is not missing 
+#  filter(!is.na(datetime)) 
+
+#summary(WQ2014$datetime) #make sure it has values for my datetime varibales 
+
+
+
+
+ 
+
+#this isnt needed if youi didint mess up earlier like i did 
+daiy_temp <- daily_temp %>%
+  select(-matches("MWAT"))
+  
+
+
+
+
+
+ggplot(daily_temp, aes(x= date)) + #sets up plot using dataframe daily_temp with horiz axis being date
+  geom_line(aes(y= daily_mean_temp), color = "blue", alpha = 0.5) + #plot daily mean temp which shows mean of all temp readings for the day 
+  geom_line(aes(y=rolling_7d_mean), color = "red", size = 1) +
+  geom_hline(aes(yintercept = MWAT_val), color = "red", linetype= "dashed" ) +
+  geom_text(
+    data = MWAT_by_site, 
+    aes(x =min(daily_temp$date), 
+             y = MWAT_val, 
+             label = paste0("MWAT = ", round(MWAT_val, 2), "°C " )),
+        hjust =0, vjust= -0.5, 
+        inherit.aes = FALSE
+    )+ 
+  facet_wrap(~location, scales = "free_x") + #plot 7day rolling avg, max value along red line = MWAT
+  labs(
+    title = "Daily Mean Temperature, 7 Day Rolling Mean, and MWAT",
+    x = "Date", 
+    y = "Temperature (°C)"
+  ) + 
+  theme_bw()
+
+date_ranges <- daily_temp %>%
+  group_by(location) %>%
+  summarise(
+    first_date = min(date, na.rm = TRUE),
+    last_date = max(date, na.rm = TRUE),
+    n_days = n(),  # how many days of data exist
+    .groups = "drop"
+  )
+
+print(date_ranges)
