@@ -1,63 +1,366 @@
 #Lesson goals:
 
-#0. Load packages - packages of the specific languages you want
+#0. Load packages - packages of the specific languages you want (also, set working directory)
 #1. Open a cleaned dataset - have github read in data, tell it what to name files -clean names- and where they live
 #2. Understand key columns (timestamp, location, variables)
 #3. Filter by site + date window
 #4. Make 3 core plots 
 #5. Export plots
 
-# Also, need to set working directory: setwd("C:/Users/jasmine.moffett") to biggest folder that contains everything you need
-
-#start of lesson; following AO's instructions on Github in "ScottCreek_HistoricWaterQualityData"
-
+#set working directory
 
 ###0. Install and load packages
 
-#Load the lesson's necessary packages; for this lesson we will use tidyverse, lubridate, and janitor.
+#Load necesary packages. This lesson will use tidyverse, lubridate, and janitor.
 
-#A. you will need to install these packages first; to do so, write install.packages(c("insert package name here")
+#A. You will need to install these packages first.
+
 install.packages(c("tidyverse", "lubridate", "janitor"))
 
-#8. Now call them in:
+
+#B. Now call them in:
 library(tidyverse)
 library(lubridate)
 library(janitor)
 
-#NOTE: you can skip step A in the future once you have installed the packages
+#You can skip Step A once you have installed the packages.
 
 
 
-##1. load in dataset
+### 1. Load in dataset
 
-#We want to load in a single csv file named "WQ2015_clean.csv" (which is currently on my desktop in the "temp_data" folder and under "data")
-#There are many ways to load in the data, for this lesson, we will use this command-
-#      ChosenDataSetName <- read_csv("Your/File/Path/Is/Copmuter/Specific/YourFileName.csv")
+#We are loading in a single .csv file named "WQ2015_clean.csv". You can load in this data many different ways. 
+#For this lesson, we will use this command - 
+#      ChosenDataSetName <- read_csv("Your/File/Path/Is/Computer/Specific/YourFileName.csv")
 
 #Let's name our dataset "WQ2015"
-#On AO's computer, the filepath to her .csv is "/Users/alexia.olsen/Desktop/temp_data/data/output/WQ2015_clean.csv") 
+#On my computer, the filepath to this .csv is "/Users/alexia.olsen/Desktop/temp_data/Data/WQ2015_clean.csv"
 
-# Following the template, mine might be "/Users/jasmine.moffett/Desktop/temp_data/data/WQ2015_clean.csv"
-# So, I will use the command-
+#So mine might be: "/users/jasmine.moffett/Desktop/temp_data/data/WQ2015_clean.csv"
 
-WQ2015<-read_csv("/Users/jasmine.moffett/Desktop/temp_data/data/WQ2015_clean.csv")
+#So I will use this command - WQ2015 is what we are naming this
 
-#Check it read using glimpse
+WQ2015 <- read.csv("/users/jasmine.moffett/Desktop/temp_data/data/WQ2015_clean.csv")
+
+#If you didn't receive an error code, congratulations! You *probably* just read in the data. 
+#My favorite way to check is - 
+
+glimpse(WQ2015)
+
+#looks good.
+
+
+
+
+
+### 2. Tidy up and explore columns 
+#We want to examine the imported data's column names.
+colnames(WQ2015)
+
+#You will see that the dataset's column names contain spaces and special characters, which is tedious to type. 
+#It is helpful to create a dataset with names that are simple (uncapitalized, with no spaces or special characters).
+
+#You can use the clean_names() command through package "janitor" to tidy columns up. 
+#Clean_names does not change the data, it only standardizes column names - everything becomes lowercase with underscores - like magic!
+
+#To use clean name command:
+# "WQ2015<-WQ2015 %>%
+# clean-names()"
+# The whole function above is saying that in order to tidy column names, put "WQ2015" into "clean_names()" using "%>%" (called pipe) and name that WQ2015
+#So let's try it out!
+
+WQ2015<-WQ2015 %>% 
+  clean_names()
+
+#Now let's investigate our work - 
+colnames(WQ2015)
+
+#Much better.
+
+#parse timestamp for whole dataset after import (make sure timestamp is not a chr = make it POSXct or dttm) Also, tell r what timezone you are in
+WQ2015 <- WQ2015 %>%
+  mutate(timestamp = with_tz(as_datetime(timestamp), tzone = "America/Los_Angeles"))
+
 glimpse(WQ2015)
 
 
 
 
+### 3. Basic filtering
+
+#A. Filter to one site -> 
+
+big_creek<-WQ2015 %>% filter(location== "Big Creek")
+
+#In this line of code, the pipe took the WQ2015 dataset and "poured" it into the filter() function. Then, the filter() function looked through the location column and kept only the rows that matched "Big Creek".
+#To check if this worked...
+
+head(big_creek)  
+#Examine big creek
+
+#B. Filter to a date range
+bigcreek_nov<-WQ2015 %>%
+  filter(location == "Big Creek") %>%
+  filter(timestamp >= as.POSIXct("2015-11-01", tz="America/Los_Angeles"), 
+         timestamp < as.POSIXct("2015-11-30", tz="America/Los_Angeles"))
+#By using as.POSIXct() above, you are telling R: "Don't just look at these numbers as text; treat them as specific moments in time in California."
+
+head(bigcreek_nov)
+
+glimpse(bigcreek_nov)
+
+### 4. Plotting
+
+#Ggplot is an excellent package for plotting. 
+
+#The code for a Time-series plot in ggplot is - 
+
+#    ggplot(dataset, aes(x, y)) +
+#      geom_line() +
+#      theme_minimal() +
+#      labs(title = "Title",
+#           x = "X-Title", y = "Y-Title (Don't Forget Units!)")
+
+#Where: 
+#      x = timestamp 
+#      y = variable (in this case, temperature)
+#      geom_line for continuous sensors
+
+
+#A. Here we go!
+ggplot(bigcreek_nov, aes(timestamp, temperature))+
+  geom_line(linewidth = 0.4) +
+  theme_minimal() +
+  labs(title = "Big Creek Temperature (Nov 2015)",
+       x = "Date", y = "Temperature (°C)")
+
+#Don't panic - you should have recieved an error code. 
+#R doesn't like something about our variable "temperature"
+#This is because our column is named "temperature_c", not "temperature"
+
+#So let's fix that and add some color- 
+ggplot(bigcreek_nov, aes(timestamp, temperature_c)) +
+  geom_line(color="steelblue", linewidth=0.5) +
+  theme_minimal() +
+  labs(title = "Big Creek Temperature (Nov 2015)", 
+       x = "Date", y = "Temperature (°C)")
+
+#YAYAYAY!
+
+nrow(bigcreek_nov)
+str(bigcreek_nov)
+
+#Or a more fitting color...
+ggplot(bigcreek_nov, aes(timestamp, temperature_c)) +
+  geom_line(color = "salmon", linewidth = 0.5) +
+  theme_minimal() +
+  labs(title = "Big Creek Temperature (Nov 2015)", x= "Date", y ="Temperature (°C)")
+
+#We can also color the plot by hour as a neat trick.
+bigcreek_nov %>%
+  mutate(hour = lubridate::hour(timestamp)) %>%
+  ggplot(aes(timestamp,temperature_c, color=hour)) +
+  geom_line(linewidth = 0.5) +
+  scale_color_viridis_c()+
+  theme_minimal()+
+  labs(title="Big Creek Temperature with Trend", 
+       x = "Date", y = "Temperature (°C)")
+
+#Google around to explore ggplot modifications!
 
 
 
 
 
 
+#B. Ggplot with facet by location (PLOT WITH ALL DIFF LOCATION SITES)
+#Here is the code to temporally filter out data from our main dataset, and then graph the data with a facet wrap: faciting gives each location it's own space
+#We are now going to plot the other location sites, not justbig creek
+  
+WQ2015 %>%
+  filter(timestamp >= as.POSIXct("2015-11-01", tz="America/Los_Angeles"), #We want data between these 2 dates
+         timestamp <  as.POSIXct("2015-11-31", tz="America/Los_Angeles")) %>%
+  ggplot(aes(timestamp, temperature_c)) + #These are our variables 
+  geom_line(linewidth = 0.3) +
+  facet_wrap(~ location, scales = "free_y") + #And we want the data faceted by location, By default, when you facet a plot, R forces every single graph to use the exact same Y-axis (e.g., all graphs must show 0°C to 30°C). Using free_y breaks that rule and lets each graph adjust to its own data.
+  theme_minimal() +
+  labs(title = "Temperature by Site (November 2015)",  #And of course a nice title
+       x = "Date", y = "Temperature (°C)")
+
+#You should have receievd an error code! 
+#Always l over what R gave you as an error response because it can be very informative.  Can you figure out what went wrong?
+#R will tell you it is angry with our timestamp command "("2015-11-31", tz="America/Los_Angeles")". 
+#R says it is not to standard, so it doesn't understand how to plot the command.
+
+#So the problem is: #There are only 30 days in November. R is VERY picky about things like this.
+#Let's fix and graph. 
+
+WQ2015 %>%
+  filter(timestamp >= as.POSIXct("2015-11-01", tz="America/Los_Angeles"),
+         timestamp < as.POSIXct("2015-11-30", tz="America/Los_Angeles")) %>%     #Corrected range
+  ggplot(aes(timestamp, temperature_c)) +   #These are our variables 
+  geom_line(linewidth = 0.3) +
+  facet_wrap(~ location, scales = "free_y") +   
+  theme_minimal() +
+  labs(title = "Temperature by Site (November 2015)",  
+       x = "Date", y = "Temperature (°C)")
+
+#Looks good! 
+
+#But we need COLOR!
+#Even though each site is in its own facet, coloring by location helps reinforce which line belongs to which panel.
+WQ2015 %>%
+  filter(
+    timestamp >= as.POSIXct("2015-11-01", tz = "America/Los_Angeles"),
+    timestamp <  as.POSIXct("2015-11-30", tz = "America/Los_Angeles")
+  ) %>%
+  ggplot(aes(timestamp, temperature_c, color = location)) +   #Add color line here
+  geom_line(linewidth = 0.4) +
+  facet_wrap(~ location, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Temperature by Site (November 2015)",
+    x = "Date",
+    y = "Temperature (°C)",
+    color = "Site"      #We should add color to our legend
+  )
+
+#Much better :) 
+
+#I'm very fond of this plot. If we name the plot, we can quickly call it up. Let's name it temp_nov_plot.
+
+#You can name plots, datasets, subsets, and beyond with this simple command format: 
+#          NameOfItem <- DatasetBeingRenamed(AndHow)
+
+
+temp_nov_plot <- WQ2015 %>% #Naming the plot "temp_nov_plot"
+  filter(
+    timestamp >= as.POSIXct("2015-11-01", tz = "America/Los_Angeles"),
+    timestamp <  as.POSIXct("2015-11-30", tz = "America/Los_Angeles")
+  ) %>%
+  ggplot(aes(timestamp, temperature_c, color = location)) +
+  geom_line(linewidth = 0.4) +
+  facet_wrap(~ location, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Temperature by Site (November 2015)",
+    x = "Date",
+    y = "Temperature (°C)",
+    color = "Site"
+)
+
+#Let's see if it worked - 
+temp_nov_plot    
+#There's our plot! Looks good. 
 
 
 
+#C. Diel pattern graphing 
 
+#Another fun plot example is a diel pattern graph using ggplot.
+#We first need to create a subset caleld "bigcreek_diel" that contains temperature variable summarized as mean temperature and grouped by hour. 
+
+bigcreek_diel <- WQ2015 %>%
+ filter(location == "Big Creek") %>%
+  mutate(hour = hour(timestamp)) %>%
+  group_by(hour) %>%
+  summarise(temperature_mean = mean(temperature_c, na.rm = TRUE), .groups= "drop")
+
+
+#Now we can plot our bigcreek_diel subset. 
+ggplot(bigcreek_diel, aes(hour, temperature_mean)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Big Creek Mean Temperature by Hour of Day (2015)",
+       x = "Hour of Day", y = "Mean Temperature (°C)")
+  
+  
+#Looks good. 
+
+#Let's add a color, of course. 
+#Look up at our previous commands for ggplots and see if you can figure out where we should insert the color command. Also, name the plot! 
+
+bc_mean_temp_byhourofday <- ggplot(bigcreek_diel, aes(hour, temperature_mean)) +
+  geom_line(color= "salmon", linewidth= 0.5) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Big Creek Mean Temperature by Hour of Day (2015)",
+       x = "Hour of Day", y = "Mean Temperature (°C)")
+
+#There are multiple ways to do this, but the simplest is to insert the color command into the geom_line() aesthetic command. I also added a linewidth command. 
+
+
+
+### 5. Saving our plots or datasets
+#A. We need to tell R where we want to save our plots. 
+#Let's see what our current working directory is.
+
+getwd()
+
+setwd("/Users/jasmine.moffett/Desktop/temp_data")
+
+#B. Naming plots
+#You can only save a plot that has a name. 
+#Earlier we named the colorful plot temp_nov_plot. Let's save it to our working directory.
+
+bc_mean_temp_byhourofday #what I named the diel plot
+
+#now let's save temp_nov_plot to our working directory
+
+ggsave(
+  filename = "temp_data/temperature_by_site_nov2015.png", #"Where the file should go within our wd/What the file is called"
+  plot = temp_nov_plot,
+  width = 12,  #width
+  height =6,   #height
+  dpi = 300
+)
+
+#The first time you run this code, R will ask you if you want to create the directory location "lessonplots" because the folder doesn't exist.
+#Reply 1 for yes. FUTURE ME--> CHOSE A NEW NAME, I WAS DUMB AND NAMED IT TEMP_DATA LIKE THE FOLDER IT IS INSIDE, GIVE IT UNIQUE NAME.
+
+1
+
+#Go check the output folder. You should now see the folder "lessonplots" and the saved plot within it. 
+# Ta da! Continue saving and exploring plots!
+
+
+#let's try this one: 
+
+bc_mean_temp_byhourofday
+
+ggsave(
+  filename= "r_lesson_plots/bc_mean_temp_byhourofday.png",
+  plot = bc_mean_temp_byhourofday,
+  width = 12,  #width
+  height =6,   #height
+  dpi = 300
+)
+1  
+
+#C. Saving datasets
+#We can also save datasets we create in R, such as our November Big Creek dataset from earlier, bigcreek_nov. 
+
+#To save a dataset: 
+
+#as a csv:
+
+write_csv(  #as a csv (.csv)
+  bigcreek_nov,
+  "/Users/jasmine.moffett/Desktop/temp_data/data/bigcreek_nov2015.csv"
+)
+
+#as an excel file:
+
+install.packages("writexl")
+library(writexl)
+
+writexl::write_xlsx(      #as an excel file (.xlsx)
+  bigcreek_nov,
+  "/Users/jasmine.moffett/Desktop/temp_data/data/bigcreek_nov2015.xlsx"
+)
+
+  
 
 
 
