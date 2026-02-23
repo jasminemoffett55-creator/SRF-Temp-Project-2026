@@ -51,12 +51,13 @@ daily_temp_full <- daily_temp %>%
   group_by(location) %>%
   arrange(date) %>%
   mutate(
-    rolling_7d_mean = rollapply(
-      daily_mean_temp,
-      width = 7,
-      FUN = function(x) if (all(!is.na(x))) mean(x) else NA,
-      align = "right",
-      fill = NA
+     rolling_7d_mean = slide_index_dbl(
+      .x = daily_mean_temp,        # Column to calculate the average on
+      .i = date,         # Date index column
+      .f = mean,         # Function to apply (mean)
+      .before = days(6), # Window size: 6 days before the current date
+      .complete = FALSE, # Allow partial windows at the start
+      .na_rm = TRUE      # Remove NA values within the window
     )
   ) %>%
   ungroup()
