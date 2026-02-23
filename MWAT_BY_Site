@@ -38,10 +38,10 @@ daily_temp <- WQ2014 %>% #creates dataframe with mean temps
             .groups = "drop")
 
 
-# Create daily_temp_full by generating site-specific date ranges
+# calc 7d rolling avg in daily_temp dataframe 
 daily_temp <- daily_temp %>%
-  group_by(location) %>%
-  # Create a sequence from the min to max date FOR EACH site
+# Create a sequence from the min to max date FOR EACH site
+group_by(location) %>%
   reframe(
     date = seq(min(date), max(date), by = "day")
   ) %>%
@@ -57,7 +57,7 @@ daily_temp <- daily_temp %>%
       .f = mean,         # Function to apply (mean)
       .before = days(6), # Window size: 6 days before the current date
       .complete = FALSE, # Allow partial windows at the start
-      .na_rm = TRUE      # Remove NA values within the window
+      .na_rm = TRUE      # Remove NA values within the window, allow to calc with less than 7 days 
     )
   ) %>%
   ungroup()
@@ -81,7 +81,7 @@ daily_temp <- daily_temp %>%
   )
 
 
-
+#make sure its using the full range of values for each site 
 date_check <- daily_temp %>%
   group_by(location) %>%
   summarise(
@@ -94,11 +94,11 @@ date_check <- daily_temp %>%
 print(date_check)
 
 
-
+#create site specific plots showing daily_mean_temp, 7d rolling avg, MWAT
 ggplot(daily_temp, aes(x= date)) + #sets up plot using dataframe daily_temp with horiz axis being date
   geom_line(aes(y= daily_mean_temp), color = "blue", alpha = 0.5) + #plot daily mean temp which shows mean of all temp readings for the day 
   geom_line(aes(y=rolling_7d_mean), color = "red", size = 1) +
-  geom_hline(aes(yintercept = MWAT_val), color = "red", linetype= "dashed" ) +
+  geom_hline(aes(yintercept = MWAT_val), color = "red", linetype= "dashed" ) + #plot MWAT as horiz dashed line 
   geom_text(
     data = MWAT_by_site, 
     aes(x =min(daily_temp$date), 
@@ -115,13 +115,3 @@ ggplot(daily_temp, aes(x= date)) + #sets up plot using dataframe daily_temp with
   ) + 
   theme_bw()
 
-date_ranges <- daily_temp %>%
-  group_by(location) %>%
-  summarise(
-    first_date = min(date, na.rm = TRUE),
-    last_date = max(date, na.rm = TRUE),
-    n_days = n(),  # how many days of data exist
-    .groups = "drop"
-  )
-
-print(date_ranges)
