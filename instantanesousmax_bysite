@@ -1,0 +1,54 @@
+#set working directory 
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
+
+#install packages 
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "dplyr", "zoo"
+)) 
+
+#read in libraries 
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(zoo) 
+
+#read in and check csv
+WQ2015 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2015_clean_FINAL.csv") %>%
+  clean_names() %>%
+  mutate(location = str_trim(location), #get rid of spacing inconsistencies in location names
+         date=as.Date(date, format = "%m/%d/%Y") # make sure date var is registering as date
+         )
+
+
+#only keep sites of interest 
+sites_keep <- c("Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek")
+WQ2015 <- WQ2015 %>%
+  filter(location %in% sites_keep)  
+
+
+#calc daily max 
+daily_temp <- WQ2015 %>%
+  group_by(location, date) %>%  #group temp values by date 
+  summarise(daily_max_temp = max(temperature_c, na.rm= TRUE)) %>% #calc max temp per day, ensure there are no NAs 
+  ungroup()
+
+
+
+
+#plot daily max value for everyday of the year 
+ggplot(daily_temp, aes(x=date)) + 
+  geom_line(aes(y=daily_max_temp), color = "blue", alpha = 0.5) +#raw daily maxs 
+  geom_hline(yintercept=24, color= "red", linetype= "dotted", size =1 )+ 
+  annotate("text",
+           x = max(daily_temp$date),
+           y = 24,
+           label = "24°C Threshold",
+           color = "red",
+           hjust = 1,
+           vjust = -0.5) +
+  facet_wrap(~location) +
+  labs(
+    title = "Daily Instantaneous Maximum Temperature with Critical Temperature Threshold",
+    x = "Date",
+    y= "Temperature (°C)") + theme_minimal()
