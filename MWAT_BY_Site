@@ -23,7 +23,7 @@ WQ2014 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2014_clean_FIN
     location = str_trim(location), #get rid of spacing inconsistencies in location names
     date=as.Date(datetime, format = "%m/%d/%Y") # make date var which+ gets rid of time and only keeps date
     ) %>%
-  filter(!is.na(datetime)) #only keep rows where datetime isnt missing
+  filter(!is.na(datetime)) #only keep rows where datetime isnt missing --> this may not be needeed so maybe delete? 
 
 
 #only keep sites of interest 
