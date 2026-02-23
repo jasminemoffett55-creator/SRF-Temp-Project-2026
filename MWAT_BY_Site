@@ -39,7 +39,7 @@ daily_temp <- WQ2014 %>% #creates dataframe with mean temps
 
 
 # Create daily_temp_full by generating site-specific date ranges
-daily_temp_full <- daily_temp %>%
+daily_temp <- daily_temp %>%
   group_by(location) %>%
   # Create a sequence from the min to max date FOR EACH site
   reframe(
@@ -65,7 +65,7 @@ daily_temp_full <- daily_temp %>%
 
 
 #create MWAT_by_site dataframe and calc MWAT per site 
-MWAT_by_site <- daily_temp_full %>% #create MWAT_by_site from daily_temp_full 
+MWAT_by_site <- daily_temp %>% #create MWAT_by_site from daily_temp
   group_by(location) %>%
   summarise(
     MWAT_val = max(rolling_7d_mean, na.rm=TRUE), #find max of all valid rolling means 
@@ -74,7 +74,7 @@ MWAT_by_site <- daily_temp_full %>% #create MWAT_by_site from daily_temp_full
 
 
 #add MWAT back for plotting 
-daily_temp_full <- daily_temp_full %>%
+daily_temp <- daily_temp %>%
   left_join(MWAT_by_site, by = "location") %>% #add MWAT_by_site to daily_temp_full
  mutate(
    facet_label = paste0(location, "\nMWAT = ", round(MWAT_val, 2),  " °C") #create new col called fact_label with site, location, line break
@@ -82,7 +82,7 @@ daily_temp_full <- daily_temp_full %>%
 
 
 
-date_check <- daily_temp_full %>%
+date_check <- daily_temp %>%
   group_by(location) %>%
   summarise(
     first_real_temp = min(date[!is.na(daily_mean_temp)]),
