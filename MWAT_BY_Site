@@ -1,4 +1,4 @@
-issue bc it is still returning days that dont exist. im not sure how to fix this
+
 
 setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
 
