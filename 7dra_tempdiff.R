@@ -1,4 +1,3 @@
-install.packages(c("tidyverse", "lubridate", "janitor", "dplyr"))
 require(tidyverse)
 require(lubridate)
 require(janitor)
@@ -12,7 +11,8 @@ WQ2014.raw <- read.csv("WQ2014_clean_FINAL.csv")
 WQ2014 <- WQ2014.raw %>%  
   clean_names() %>%
   dplyr::select( timestamp, location, id, date, temperature_c) %>%
-  rename(temp = temperature_c)
+  rename(temp = temperature_c) %>%
+  filter(!is.na(datetime))
 
 WQ2014 <- WQ2014 %>%
   mutate(datetime = mdy_hms(timestamp))
@@ -32,17 +32,20 @@ daily_temp_2014 <- WQ2014 %>%  #creating new dataframe which is daily_temp using
 
 #calc MWAT
 daily_temp_2014 <- daily_temp_2014 %>% #add following code to daily temp dataframe
+  filter(!is.na(date)) %>%
   arrange(date) %>% #sort daily temp in chronological order from earliest to latest date
   mutate( #any new column crewated with mutate is a col in dataframe 
-    rolling_7d_mean= rollapply( #create new column in dailytemp called rolling_7d_mean which calculates 7 day rolling mean
-      daily_mean_temp, #using the daily-meantemp
-      width= 7, #7 days
-      FUN = mean, #take the mean
-      align = "right", #avg ends on current day 
-      fill = NA, # put NA in rows where rolling avg cannot be computed due to lack of 7 previous days
-      na.rm= TRUE #ignore missing temp values 
+    rolling_7d_mean = slide_index_dbl(
+      .x = daily_mean_temp,        # Column to calculate the average on
+      .i = date,         # Date index column
+      .f = mean,         # Function to apply (mean)
+      .before = days(6), # Window size: 6 days before the current date
+      .complete = FALSE, # Allow partial windows at the start
+      .na_rm = TRUE      # Remove NA values within the window
     )
-  )
+  ) %>%
+  ungroup()
+
 daily_temp_2014$year <- c("2014")
 
 daily_temp_2014$md <- format(daily_temp_2014$date, "%m-%d")
@@ -57,7 +60,9 @@ WQ2015.raw <- read.csv("WQ2015_clean_FINAL.csv")
 WQ2015 <- WQ2015.raw %>%
   clean_names() %>%
   dplyr::select(timestamp, date, time_stamp, location, id, date, temperature_c) %>%
-  rename(temp = temperature_c)
+  rename(temp = temperature_c) %>%
+  filter(is.na(datetime))
+  
   
 WQ2015$timestamp <- mdy_hms(paste(WQ2015$date, WQ2015$time_stamp))
 
@@ -78,17 +83,19 @@ daily_temp_2015 <- WQ2015 %>%  #creating new dataframe which is daily_temp using
 
 #calc MWAT
 daily_temp_2015 <- daily_temp_2015 %>% #add following code to daily temp dataframe
+  filter(!is.na(date)) %>%
   arrange(date) %>% #sort daily temp in chronological order from earliest to latest date
   mutate( #any new column crewated with mutate is a col in dataframe 
-    rolling_7d_mean= rollapply( #create new column in dailytemp called rolling_7d_mean which calculates 7 day rolling mean
-      daily_mean_temp, #using the daily-meantemp
-      width= 7, #7 days
-      FUN = mean, #take the mean
-      align = "right", #avg ends on current day 
-      fill = NA, # put NA in rows where rolling avg cannot be computed due to lack of 7 previous days
-      na.rm= TRUE #ignore missing temp values 
+    rolling_7d_mean = slide_index_dbl(
+      .x = daily_mean_temp,        # Column to calculate the average on
+      .i = date,         # Date index column
+      .f = mean,         # Function to apply (mean)
+      .before = days(6), # Window size: 6 days before the current date
+      .complete = FALSE, # Allow partial windows at the start
+      .na_rm = TRUE      # Remove NA values within the window
     )
-  )
+  ) %>%
+  ungroup()
 
 daily_temp_2015$year <- c("2015")
 
@@ -105,7 +112,7 @@ MWAT #print MWAT
 
 
 
-diff.plot <- ggplot(mwatdiff, aes(x = date.x, y = diff)) +
+diff.plot <- ggplot(rolldaydiff, aes(x = date.x, y = diff)) +
     geom_line() +
     geom_hline(yintercept = 0, color = "black") +
     scale_x_date(
@@ -122,6 +129,6 @@ diff.plot <- ggplot(mwatdiff, aes(x = date.x, y = diff)) +
   
 diff.plot  
   
-class(mwatdiff$md)
+class(rolldaydifff$md)
 mwatdiff$md <- as.Date(mwatdiff$md, format = "%m-%d")
 
