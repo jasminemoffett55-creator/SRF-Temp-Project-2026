@@ -13,6 +13,7 @@ library(janitor)
 library(ggplot2)
 library(zoo)
 library(tidyr)
+require(slider)
 
 
 #read in csv, clean names, and set datetime with only valid datetime 
