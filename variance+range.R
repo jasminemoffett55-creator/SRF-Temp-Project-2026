@@ -42,5 +42,27 @@ maxvarbyloc  <- alldata %>%
   summarise(meanvar = (var = var(daily_max_temp, na.rm = TRUE))) %>%
   ungroup()
 
+alldata <- alldata[-1337, ]
+
+maxmean <- max(alldata$daily_mean_temp, na.rm = TRUE)
+minmean <- min(alldata$daily_mean_temp, na.rm = TRUE)
+meanrange <- (maxmean - minmean)
+meanrange
+
+maxmax <- max(alldata$daily_max_temp, na.rm = TRUE)
+minmax <- min(alldata$daily_max_temp, na.rm = TRUE)
+maxrange <- (maxmax - minmax)
+maxrange
+
+range <- WQ2014 %>%
+  group_by(location, date) %>%
+  mutate(range = max(temp) - min(temp)) %>%
+  ungroup() %>%
+  distinct(date, location, .keep_all = T) %>%
+  select(date, location, range)
+  
+
+
+
 
 
