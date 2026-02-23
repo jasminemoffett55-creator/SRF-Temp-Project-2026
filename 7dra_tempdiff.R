@@ -102,9 +102,10 @@ daily_temp_2015$year <- c("2015")
 daily_temp_2015$md <- format(daily_temp_2015$date, "%m-%d")
 
 rolldaydiff <- inner_join(daily_temp_2014, daily_temp_2015, by = "md") %>%
-  group_by(md) %>%
-  mutate(diff = rolling_7d_mean.y - rolling_7d_mean.x) %>%
-  ungroup()
+  group_by(date.x) %>%
+  mutate(base = mean(unlist(across(c(rolling_7d_mean.x,rolling_7d_mean.y), mean, na.rm = TRUE))))
+
+ 
 
 MWAT <- max(daily_temp_2015$rolling_7d_mean, na.rm = TRUE) #assign var MWAT to previous function
 MWAT #print MWAT
@@ -112,15 +113,77 @@ MWAT #print MWAT
 
 
 
-diff.plot <- ggplot(rolldaydiff, aes(x = date.x, y = diff)) +
+
+WQ2016.raw <- read.csv("WQ2016_clean_FINAL.csv") 
+
+WQ2016 <- WQ2016.raw %>%
+  clean_names() %>%
+  dplyr::select( timestamp, location, date, temperature_c) %>%
+  rename(temp = temperature_c)
+  
+
+WQ2016 <- WQ2016 %>%
+  mutate(datetime = mdy_hms(timestamp))
+
+range.Date(WQ2016$date)
+
+
+daily_temp_2016 <- WQ2016 %>%  #creating new dataframe which is daily_temp using wq2016 and...
+  mutate(date = as.Date(datetime)) %>%   # extract just the day
+  group_by(date) %>% #group temp values by date
+  summarise(
+    daily_mean_temp = mean(temp, na.rm = TRUE) #ignore missing temp readings and calc mean 
+  ) %>%
+  ungroup() #this avoids grouping things on accident later on, should use ungroup() after summarise() unless you want the group for all further operations 
+
+
+
+#calc MWAT
+daily_temp_2016 <- daily_temp_2016 %>% #add following code to daily temp dataframe
+  filter(!is.na(date)) %>%
+  arrange(date) %>% #sort daily temp in chronological order from earliest to latest date
+  mutate( #any new column crewated with mutate is a col in dataframe 
+    rolling_7d_mean = slide_index_dbl(
+      .x = daily_mean_temp,        # Column to calculate the average on
+      .i = date,         # Date index column
+      .f = mean,         # Function to apply (mean)
+      .before = days(6), # Window size: 6 days before the current date
+      .complete = FALSE, # Allow partial windows at the start
+      .na_rm = TRUE      # Remove NA values within the window
+    )
+  ) %>%
+  ungroup()
+
+daily_temp_2016$year <- c("2016")
+
+daily_temp_2016$md <- format(daily_temp_2016$date, "%m-%d")
+
+daily_temp_2016 <- daily_temp_2016[-367, ]
+
+MWAT <- max(daily_temp_2016$rolling_7d_mean, na.rm = TRUE) #assign var MWAT to previous function
+MWAT #print MWAT
+
+rolldaydiff <- rolldaydiff[-366, ]
+
+
+rolldaydiff1 <- inner_join(rolldaydiff, daily_temp_2016, by = "md") %>%
+  group_by(md) %>%
+  mutate(diff = rolling_7d_mean - base) %>%
+  ungroup()
+
+
+
+
+
+diff.plot <- ggplot(rolldaydiff1, aes(x = date.x, y = diff)) +
     geom_line() +
     geom_hline(yintercept = 0, color = "black") +
     scale_x_date(
       date_labels = "%b %d",
       date_breaks = "30 days"
     ) +
-    annotate("text", as.Date(x = "2014-03-30"), y = 3, label = "2015 warmer", size = 5, color = "blue", fontface = "italic") +
-    annotate("text", as.Date(x = "2014-08-30"), y = -3, label = "2015 cooler", size = 5, color = "blue", fontface = "italic")+
+    annotate("text", as.Date(x = "2014-03-30"), y = 3, label = "post fire warmer", size = 5, color = "blue", fontface = "italic") +
+    annotate("text", as.Date(x = "2014-08-30"), y = -3, label = "refrence warmer", size = 5, color = "blue", fontface = "italic")+
     annotate("text", as.Date(x = "2014-05-30"), y = 4, label = "2014 MWAT = 16.6°C", size = 5, color = "black", fontface = "italic") +
     annotate("text", as.Date(x = "2014-03-30"), y = -4, label = "2015 MWAT = 18.7°C", size = 5, color = "black", fontface = "italic") +
     annotate("text", as.Date(x = "2014-11-30"), y = 2, label = "MWAT DIFF= 2.1°C", size = 5, color = "red", fontface = "italic") 
@@ -129,6 +192,6 @@ diff.plot <- ggplot(rolldaydiff, aes(x = date.x, y = diff)) +
   
 diff.plot  
   
-class(rolldaydifff$md)
-mwatdiff$md <- as.Date(mwatdiff$md, format = "%m-%d")
+
+
 
