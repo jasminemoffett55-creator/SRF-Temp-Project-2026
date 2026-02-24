@@ -1,0 +1,167 @@
+# Plot graph for Max temp of each year 2014,2015,2016 (in degrees C)
+
+install.packages(c("tidyverse", "lubridate", "janitor"))
+
+library("tidyverse")
+library("lubridate")
+library("janitor")
+
+setwd("/Users/jasmine.moffett/Desktop/temp_data/srf_data_final")
+
+WQ2014 <- read.csv("/Users/jasmine.moffett/Desktop/temp_data/srf_data_final/WQ2014_clean_FINAL.csv")
+WQ2015 <- read.csv("/Users/jasmine.moffett/Desktop/temp_data/srf_data_final/WQ2015_clean_FINAL.csv")
+WQ2016 <- read.csv("/Users/jasmine.moffett/Desktop/temp_data/srf_data_final/WQ2016_clean_FINAL.csv")
+
+glimpse(WQ2014)
+
+#GOAL: Max temp box plot for 2014, 2015, 2016
+
+### 2. Tidy up and explore columns for each year, make sure all columns match names.
+
+colnames(WQ2014)
+colnames(WQ2015)
+colnames(WQ2016)
+
+WQ2014<-WQ2014 %>%
+  clean_names()
+
+colnames(WQ2014)
+
+WQ2015<-WQ2015 %>%
+  clean_names()
+
+colnames(WQ2015)
+
+WQ2016<-WQ2016 %>%
+  clean_names()
+
+colnames(WQ2016)
+
+WQ2016<-WQ2016 %>%
+  select(-id_num)
+
+colnames(WQ2016)
+
+nrow(WQ2014)
+nrow(WQ2015)
+nrow(WQ2016)
+
+WQ2014<-WQ2014 %>%
+  select(c("timestamp","temperature_c","date", "location"))
+WQ2014$year <- c("2014")
+colnames(WQ2014)
+nrow(WQ2014)
+
+WQ2015<-WQ2015 %>%
+  select(c("timestamp","temperature_c","date", "location"))
+WQ2015$year <- c("2015")
+colnames(WQ2015)
+nrow(WQ2015)
+
+WQ2016<-WQ2016 %>%
+  select(c("timestamp","temperature_c","date", "location"))
+WQ2016$year <- c("2016")
+colnames(WQ2016)
+nrow(WQ2016)
+
+
+###3: Compile the three data sets and make sure no data was deleted by checking sum of nrow(WQ_compiled)
+
+complied<-bind_rows(WQ2014,WQ2015,WQ2016)
+
+nrow(complied)
+
+#The sum of all the data set row #s matches the expected total, so it worked!
+
+#Now to parse the timestamps
+
+complied <- complied %>%
+  mutate(timestamp = as.POSIXct(timestamp, format = "%b/%d/%Y %H:%M:%S", tz = "America/Los_Angeles"))
+
+glimpse(complied)
+class(complied$timestamp)
+
+#B. Ggplot with facet by year (PLOT WITH ALL DIFF year maxes)
+
+### 4. Calculate the Absolute Max for Each Year
+annual_max_data <- complied %>%
+  # 1. Create a simple Date column (removes time/timezone issues)
+ 
+  group_by(year) %>%
+  # 2. Filter using simple Date strings
+  #filter(date_only >= as.Date("2014-02-26"),
+         #date_only <  as.Date("2016-11-07")) %>%
+  
+  # 3. Create the year variable
+  #mutate(year_val = year(date_only)) %>%
+  
+  # 4. Group and Summarize
+  #group_by(year_val) %>%
+  summarize(peak_temp = max(temperature_c, na.rm = TRUE)) %>%
+  
+  # 5. Safety check: remove any Inf results if a year had zero data
+  filter(is.finite(peak_temp))
+  ungroup() %>%
+# CHECK YOUR DATA: Run this line! 
+# You should see 3 rows with years and numbers.
+print(annual_max_data)
+
+
+
+
+### 5. Create the Line Graph
+# We use the summary table (annual_max_data) directly
+ggplot(annual_max_data, aes(x = year, y = peak_temp, group = 1)) +
+  geom_line(color = "darkred", linewidth = 1) +  
+  geom_point(color = "darkred", size = 3) + # Fixed: use 'size' for points
+  # Using scale_x_continuous because year is a number
+  scale_x_discrete(breaks = c(2014, 2015, 2016)) +
+  labs(
+    title = "Annual Maximum Temperature (2014-2016)",
+    subtitle = "The highest temperature recorded in each calendar year",
+    x = "Year",
+    y = "Maximum Temperature (°C)"
+  ) +
+  theme_minimal() +
+  # Adding text labels
+  geom_text(aes(label = round(peak_temp, 1)), vjust = -1.5, fontface = "bold") +
+  # Expand y-axis for labels
+  expand_limits(y = max(annual_max_data$peak_temp) + 2)
+
+
+
+amax_temp_plot <-
+ggplot(annual_max_data, aes(x = year, y = peak_temp, group = 1)) +
+  geom_line(color = "darkred", linewidth = 1) +  
+  geom_point(color = "darkred", size = 3) + # Fixed: use 'size' for points
+  # Using scale_x_continuous because year is a number
+  scale_x_discrete(breaks = c(2014, 2015, 2016)) +
+  labs(
+    title = "Annual Maximum Temperature (2014-2016)",
+    subtitle = "The highest temperature recorded in each calendar year",
+    x = "Year",
+    y = "Maximum Temperature (°C)"
+  ) +
+  theme_minimal() +
+  # Adding text labels
+  geom_text(aes(label = round(peak_temp, 1)), vjust = -1.5, fontface = "bold") +
+  # Expand y-axis for labels
+  expand_limits(y = max(annual_max_data$peak_temp) + 2)
+
+print(annual_max_data)
+amax_temp_plot
+
+getwd()
+
+ggsave(
+  filename = "temp_data/r_lesson_plots/AMAX_temp_plot.png",
+  plot = amax_temp_plot,
+  width = 12,  #width
+  height =6,   #height
+  dpi = 300)
+
+#Next, I want to make this into a box plot!
+
+
+
+ 
