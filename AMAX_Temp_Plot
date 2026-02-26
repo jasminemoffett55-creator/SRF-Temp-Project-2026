@@ -32,6 +32,7 @@ WQ2015<-WQ2015 %>%
 
 colnames(WQ2015)
 
+
 WQ2016<-WQ2016 %>%
   clean_names()
 
@@ -100,13 +101,11 @@ annual_max_data <- complied %>%
   summarize(peak_temp = max(temperature_c, na.rm = TRUE)) %>%
   
   # 5. Safety check: remove any Inf results if a year had zero data
-  filter(is.finite(peak_temp))
-  ungroup() %>%
+  filter(is.finite(peak_temp)) %>%
+  ungroup()
 # CHECK YOUR DATA: Run this line! 
 # You should see 3 rows with years and numbers.
 print(annual_max_data)
-
-
 
 
 ### 5. Create the Line Graph
@@ -135,7 +134,7 @@ ggplot(annual_max_data, aes(x = year, y = peak_temp, group = 1)) +
   geom_line(color = "darkred", linewidth = 1) +  
   geom_point(color = "darkred", size = 3) + # Fixed: use 'size' for points
   # Using scale_x_continuous because year is a number
-  scale_x_discrete(breaks = c(2014, 2015, 2016)) +
+  scale_x_discrete(breaks = c(2014, 2015, 2016))+
   labs(
     title = "Annual Maximum Temperature (2014-2016)",
     subtitle = "The highest temperature recorded in each calendar year",
@@ -153,15 +152,68 @@ amax_temp_plot
 
 getwd()
 
-ggsave(
-  filename = "temp_data/r_lesson_plots/AMAX_temp_plot.png",
-  plot = amax_temp_plot,
-  width = 12,  #width
-  height =6,   #height
-  dpi = 300)
+#now I want to make this into a box plot!
+# want a graph displaying temps from whole year and highlights the peak annual temp --> box and whisker plot?
 
-#Next, I want to make this into a box plot!
+glimpse(WQ2015)
 
+library(ggplot2)
+
+ggplot(complied, aes(x = year, y = temperature_c)) +
+  geom_boxplot(fill = "gold", color = "black") +
+  scale_x_discrete(breaks = c(2014, 2015, 2016)) +
+  labs(title = "Professional Boxplot", y = "Values") +
+  theme_minimal()
+  
+  
+#This one is os much better!:
+  ggplot(complied, aes(x = year, y = temperature_c, fill = year)) + 
+    geom_boxplot(color = "black", alpha = 0.7, outlier.shape = NA) +
+    geom_point(data = annual_max_data, 
+               aes(x = year, y = peak_temp), 
+               color = "red", size = 4, shape = 18) +
+    geom_text(data = annual_max_data, 
+              aes(x = year, y = peak_temp, label = paste0(round(peak_temp, 1), "°C")), 
+              vjust = -1.5, color = "red", fontface = "bold") +
+    scale_x_discrete(breaks = c("2014", "2015", "2016")) + 
+    labs(
+      title = "Temperature Distribution & Yearly Maximum Temperatures",
+      subtitle = "Red diamonds and labels indicate the absolute maximum temperature for that year.",
+      x = "Year",
+      y = "Temperature (°C)"
+    ) +
+    theme_minimal() +
+    scale_fill_manual(values = c("gold", "orange", "darkorange")) +
+    expand_limits(y = max(annual_max_data$peak_temp) + 3)
+
+  amax_temp_plot_final <-
+    ggplot(complied, aes(x = year, y = temperature_c, fill = year)) + 
+    geom_boxplot(color = "black", alpha = 0.7, outlier.shape = NA) +
+    geom_point(data = annual_max_data, 
+               aes(x = year, y = peak_temp), 
+               color = "red", size = 4, shape = 18) +
+    geom_text(data = annual_max_data, 
+              aes(x = year, y = peak_temp, label = paste0(round(peak_temp, 1), "°C")), 
+              vjust = -1.5, color = "red", fontface = "bold") +
+    scale_x_discrete(breaks = c("2014", "2015", "2016")) + 
+    labs(
+      title = "Temperature Distribution & Yearly Maximum Temperatures",
+      subtitle = "Red diamonds and labels indicate the absolute maximum temperature for that year.",
+      x = "Year",
+      y = "Temperature (°C)"
+    ) +
+    theme_minimal() +
+    scale_fill_manual(values = c("gold", "orange", "darkorange")) +
+    expand_limits(y = max(annual_max_data$peak_temp) + 3)
+
+  setwd("/Users/jasmine.moffett/Desktop/temp_data/r_lesson_plots")
+ 
+  ggsave(
+    filename = "AMAX_final_plot.png",
+    plot = amax_temp_plot_final,
+    width = 12,  #width
+    height =6,   #height
+    dpi = 300)
 
 
  
