@@ -1,0 +1,74 @@
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
+
+#install packages
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "zoo", "slider"))
+
+
+#call in packages
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(zoo)
+library(tidyr)
+library(slider)
+
+#read in csv, clean names, and set datetime with only valid datetime 
+WQ2015 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/WQ2015_clean_FINAL.csv") %>% #read in csv
+  clean_names() %>% #clean/standardize col names
+  mutate( 
+    location = str_trim(location), #get rid of spacing inconsistencies in location names
+    date=as.Date(date, format = "%m/%d/%Y") # make sure date var is registering as date
+  ) 
+
+unique_sites <- unique(WQ2015$location)
+print(unique_sites)
+
+
+
+##only keep sites of interest 
+sites_keep <- c("Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek", "Manta", "Scott Creek Lagoon")
+WQ2015 <- WQ2015 %>%
+  filter(location %in% sites_keep)  
+
+
+print(sum)
+daily_temp <- WQ2015 %>%
+  group_by(location, date) %>% #split data into groups based on unique combo of loc/date
+  summarise(daily_mean_temp = mean(temperature_c, na.rm=TRUE), #take all temp readings for one day and ignore missing values within the day, compute avg and save it in new col 
+            .groups = "drop")
+
+
+
+gap_report <- daily_temp %>%
+  # 1. Start with your specific locations (Optional)
+  # filter(location %in% c("Big Creek", "Stone River")) %>% 
+  
+  group_by(location) %>%
+  
+  # 2. Fill the timeline per location
+  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
+  
+  # 3. Identify missing temperature values
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  
+  # 4. Create a unique ID for each continuous "run" of NAs
+  mutate(gap_id = cumsum(is_missing != lag(is_missing, default = first(is_missing)))) %>%
+  
+  # 5. Filter for only the missing rows
+  filter(is_missing) %>%
+  
+  # 6. CRITICAL: Group by BOTH location and gap_id
+  group_by(location, gap_id) %>%
+  summarize(
+    gap_start = min(date),
+    gap_end = max(date),
+    days_missing = n(),
+    .groups = "drop" # Keeps the output clean
+  ) %>%
+  
+  # 7. Remove the helper ID
+  dplyr::select(-gap_id)
+
+print(gap_report)
+
