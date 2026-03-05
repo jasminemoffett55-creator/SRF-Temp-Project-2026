@@ -83,3 +83,39 @@ print(gap_report)
 
 # Print the result
 #print(na_counts_per_site)
+
+#how to find where similarly named sensors overlap in collecting data 
+
+
+SC <- WQ2015 %>%
+  filter(location == "Upper Scott Creek") %>%
+  distinct(date)
+
+efish <- WQ2015 %>%
+  filter(location == "Upper Scott E-Fishing") %>%
+  distinct(date)
+
+overlap_dates <- inner_join(SC, efish, by = "date")
+
+print(overlap_dates)
+nrow(overlap_dates)
+
+
+overlap_summary <- WQ2015 %>%
+  filter(location %in% c("Upper Scott Creek", "Upper Scott E-Fishing")) %>%
+  distinct(location, date) %>%
+  
+  # count sites sampled per day
+  group_by(date) %>%
+  summarise(n_sites = n(), .groups = "drop") %>%
+  
+  # keep only days where both sites sampled
+  filter(n_sites == 2) %>%
+  
+  summarise(
+    overlap_days = n(),
+    first_overlap = min(date),
+    last_overlap = max(date)
+  )
+
+print(overlap_summary)
