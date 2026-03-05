@@ -26,11 +26,12 @@ print(unique_sites)
 
 
 
-##only keep sites of interest 
-sites_keep <- c("Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek", "Manta", "Scott Creek Lagoon")
+##only keep sites of interest --> change this to sites based on unique_sites
+sites_keep <- c("BC EFish", "Upper Scott Creek", "Big Creek", "Puma", "Upper Scott E-Fishing", "Weir", "Mill Creek", "Manta", "Scott Creek Lagoon")
 WQ2015 <- WQ2015 %>%
   filter(location %in% sites_keep)  
 
+print(sites_keep)
 
 print(sum)
 daily_temp <- WQ2015 %>%
@@ -72,3 +73,13 @@ gap_report <- daily_temp %>%
 
 print(gap_report)
 
+
+
+
+#how many days in each site are there valid temps for 
+#na_counts_per_site <- WQ2015 %>%
+#  group_by(location) %>%
+#  summarise(NA_days = sum(is.na(temperature_c)))
+
+# Print the result
+#print(na_counts_per_site)
