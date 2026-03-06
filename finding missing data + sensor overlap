@@ -1,3 +1,123 @@
+current working code 
+
+#problem with it not giving missing days for the entire yr but just msising data from when the sensor starting sensing. fix this
+
+#set working directory 
+setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
+
+#install packages 
+install.packages(c("tidyverse", "lubridate", "janitor", "ggplot2", "dplyr", "zoo"
+)) 
+
+#read in libraries 
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggplot2)
+library(dplyr)
+library(zoo) 
+
+#read in and check csv
+merge <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/Master_Merge.csv") %>%
+  clean_names()%>%
+  mutate(location = str_trim(site), #get rid of spacing inconsistencies in location names
+         date=as.Date(timestamp, format = "%Y-%m-%d") # make sure date var is registering as date
+  )
+
+#only keep sites of interest 
+sites_keep <- c("BC Efish", "Puma", "Weir", "MillBridge")
+
+
+merge <- merge %>%
+  filter(location %in% sites_keep) 
+
+yr_2021 <- merge %>%
+  filter(year(date) == 2021)
+
+yr_2022 <- merge %>%
+  filter(year(date) == 2022)
+
+
+#calc daily temp 
+daily_temp21 <- yr_2021 %>%
+  group_by(location, date) %>%  #group temp values by date 
+  summarise(daily_mean_temp = mean(temperature, na.rm= TRUE)) %>% #calc max temp per day, ensure there are no NAs 
+  ungroup()
+
+
+missing_summary <- daily_temp21 %>%
+  group_by(location) %>%
+  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  group_by(location) %>%
+  summarise(
+    total_days = n(),
+    missing_days = sum(is_missing),
+    percent_missing = round(100 * missing_days / total_days, 2),
+    .groups = "drop"
+  )
+
+print(missing_summary)
+
+
+
+gap_report <- daily_temp21 %>%
+  # 1. Start with your specific locations (Optional)
+  # filter(location %in% c("Big Creek", "Stone River")) %>% 
+  
+  group_by(location) %>%
+  
+  # 2. Fill the timeline per location
+  complete(date = seq.Date((2021-01-1), max(date), by = "day")) %>%
+  
+  # 3. Identify missing temperature values
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  
+  # 4. Create a unique ID for each continuous "run" of NAs
+  mutate(gap_id = cumsum(is_missing != lag(is_missing, default = first(is_missing)))) %>%
+  
+  # 5. Filter for only the missing rows
+  filter(is_missing) %>%
+  
+  # 6. CRITICAL: Group by BOTH location and gap_id
+  group_by(location, gap_id) %>%
+  summarize(
+    gap_start = min(date),
+    gap_end = max(date),
+    days_missing = n(),
+    .groups = "drop" # Keeps the output clean
+  ) %>%
+  
+  # 7. Remove the helper ID
+  dplyr::select(-gap_id)
+
+print(gap_report)
+
+
+
+
+
+
+
+#plot daily max value for everyday of the year 
+ggplot(daily_temp, aes(x=date)) + 
+  geom_line(aes(y=daily_max_temp), color = "blue", alpha = 0.5) +#raw daily maxs 
+  geom_hline(yintercept=24, color= "red", linetype= "dotted", size =1 )+ 
+  annotate("text",
+           x = max(daily_temp$date),
+           y = 24,
+           label = "24°C Threshold",
+           color = "red",
+           hjust = 1,
+           vjust = -0.5) +
+  facet_wrap(~location) +
+  labs(
+    title = "Daily Instantaneous Maximum Temperature with Critical Temperature Threshold",
+    x = "Date",
+    y= "Temperature (°C)") + theme_minimal()
+
+
+
 setwd("C:/Users/eliza.pease/Desktop/temp_data/data")
 
 #install packages
