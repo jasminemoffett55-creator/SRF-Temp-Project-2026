@@ -54,22 +54,6 @@ daily_temp18 <- yr_2018 %>%
   ungroup()
 
 
-missing_summary <- daily_temp18 %>%
-  group_by(location) %>%
-  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
-  mutate(is_missing = is.na(daily_mean_temp)) %>%
-  group_by(location) %>%
-  summarise(
-    total_days = n(),
-    missing_days = sum(is_missing),
-    percent_missing = round(100 * missing_days / total_days, 2),
-    .groups = "drop"
-  )
-
-print(missing_summary)
-
-
-
 gap_report <- daily_temp18 %>%
   # 1. Start with your specific locations (Optional)
   # filter(location %in% c("Big Creek", "Stone River")) %>% 
