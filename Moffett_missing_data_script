@@ -1,0 +1,139 @@
+ # figure out if there is any missing data in 2016--> and what sites are missing data
+
+install.packages(c("tidyverse", "lubridate", "dplyr", "tidyr",  "janitor", "ggplot2", "zoo", "slider"))
+library(lubridate)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(janitor)
+library(ggplot2)
+library(zoo)
+library(slider)
+
+setwd("/Users/jasmine.moffett/Desktop/temp_data/srf_data_FINAL")
+
+WQ2016 <- read_csv("/users/jasmine.moffett/Desktop/temp_data/srf_data_FINAL/WQ2016_clean_FINAL.csv") %>%
+  clean_names() %>%
+  mutate(
+    location = str_trim(location), #get rid of spacing inconsistencies in location names
+    date=as.Date(date, format = "%m/%d/%Y") 
+  )
+
+unique_sites <- unique(WQ2016$location)
+print(unique_sites)
+
+##only keep sites of interest 
+sites_keep <- c("Big Creek", "BC Efish", "Puma", "Upper Scott E-Fishing", "Upper Scott Creek", "Weir", "Mill Creek", "Manta", "Scott Creek Lagoon")
+WQ2016 <- WQ2016 %>%
+  filter(location %in% sites_keep) 
+
+print(sum)
+daily_temp <- WQ2016 %>%
+  group_by(location, date) %>% #split data into groups based on unique combo of loc/date
+  summarise(daily_mean_temp = mean(temperature_c, na.rm=TRUE), #take all temp readings for one day and ignore missing values within the day, compute avg and save it in new col 
+            .groups = "drop")
+
+gap_report <- daily_temp %>%
+  # 1. Start with your specific locations (Optional)
+  # filter(location %in% c("Big Creek", "Stone River")) %>% 
+  
+  group_by(location) %>%
+  
+  # 2. Fill the timeline per location
+  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
+  
+  # 3. Identify missing temperature values
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  
+  # 4. Create a unique ID for each continuous "run" of NAs
+  mutate(gap_id = cumsum(is_missing != lag(is_missing, default = first(is_missing)))) %>%
+  
+  # 5. Filter for only the missing rows
+  filter(is_missing) %>%
+  
+  # 6. CRITICAL: Group by BOTH location and gap_id
+  group_by(location, gap_id) %>%
+  summarize(
+    gap_start = min(date),
+    gap_end = max(date),
+    days_missing = n(),
+    .groups = "drop" # Keeps the output clean
+  ) %>%
+  
+  # 7. Remove the helper ID
+  dplyr::select(-gap_id)
+
+print(gap_report)
+
+# Now we want top see if certain sites overlap with dates and time: 
+# 1. Create a clean version of each site's daily data (BC Efish, Big Creek)
+site_a_data <- daily_temp %>%
+  filter(location == "Big Creek") %>%
+  rename(temp_big_creek = daily_mean_temp) %>%
+  select(date, temp_big_creek)
+
+site_b_data <- daily_temp %>%
+  filter(location == "BC Efish") %>%
+  rename(temp_bc_efish = daily_mean_temp) %>%
+  select(date, temp_bc_efish)
+
+# 2. Inner Join: This keeps ONLY dates present in BOTH dataframes
+common_days <- inner_join(site_a_data, site_b_data, by = "date") %>%
+  # Remove any rows where either side has an NA
+  filter(!is.na(temp_big_creek) & !is.na(temp_bc_efish))
+
+# 3. View the result
+print(common_days)
+
+# 4. Quick Summary
+cat("Number of days both sites have data:", nrow(common_days), "\n")
+
+# Now we want top see if certain sites overlap with dates and time: 
+# 1. Create a clean version of each site's daily data (Upper Scott Creek, Upper Scott E-fish)
+site_c_data <- daily_temp %>%
+  filter(location == "Upper Scott Creek") %>%
+  rename(temp_upper_scott = daily_mean_temp) %>%
+  select(date, temp_upper_scott)
+
+site_d_data <- daily_temp %>%
+  filter(location == "Upper Scott E-Fishing") %>%
+  rename(temp_US_efish = daily_mean_temp) %>%
+  select(date, temp_US_efish)
+
+# 2. Inner Join: This keeps ONLY dates present in BOTH dataframes
+common_days_US <- inner_join(site_c_data, site_d_data, by = "date") %>%
+  # Remove any rows where either side has an NA
+  filter(!is.na(temp_upper_scott) & !is.na(temp_US_efish))
+
+# 3. View the result
+print(common_days_US)
+
+# 4. Quick Summary
+cat("Number of days both sites have data:", nrow(common_days_US), "\n")
+
+
+
+
+
+# Now we want top see if certain sites overlap with dates and time: 
+# 1. Create a clean version of each site's daily data (Manta, Scott Creek Lagoon)
+site_e_data <- daily_temp %>%
+  filter(location == "Manta") %>%
+  rename(temp_manta = daily_mean_temp) %>%
+  select(date, temp_manta)
+
+site_f_data <- daily_temp %>%
+  filter(location == "Scott Creek Lagoon") %>%
+  rename(temp_lagoon = daily_mean_temp) %>%
+  select(date, temp_lagoon)
+
+# 2. Inner Join: This keeps ONLY dates present in BOTH dataframes
+common_days_US <- inner_join(site_e_data, site_f_data, by = "date") %>%
+  # Remove any rows where either side has an NA
+  filter(!is.na(temp_manta) & !is.na(temp_lagoon))
+
+# 3. View the result
+print(common_days_US)
+
+# 4. Quick Summary
+cat("Number of days both sites have data:", nrow(common_days_US), "\n")
