@@ -111,10 +111,6 @@ print(common_days_US)
 # 4. Quick Summary
 cat("Number of days both sites have data:", nrow(common_days_US), "\n")
 
-
-
-
-
 # Now we want top see if certain sites overlap with dates and time: 
 # 1. Create a clean version of each site's daily data (Manta, Scott Creek Lagoon)
 site_e_data <- daily_temp %>%
@@ -134,6 +130,118 @@ common_days_US <- inner_join(site_e_data, site_f_data, by = "date") %>%
 
 # 3. View the result
 print(common_days_US)
+
+
+
+
+
+
+
+###OR IF YOU WANTED A SPECIFIC TIMEFRAME
+
+
+
+
+
+
+# figure out if there is any missing data in 2016--> and what sites are missing data
+
+install.packages(c("tidyverse", "lubridate", "dplyr", "tidyr",  "janitor", "ggplot2", "zoo", "slider"))
+
+library(lubridate)
+library(tidyverse)
+library(dplyr)
+
+library(tidyr)
+library(janitor)
+
+library(ggplot2)
+library(zoo)
+library(slider)
+
+setwd("/Users/jasmine.moffett/Desktop/temp_data/srf_data_FINAL")
+
+# 1. Load and clean the data
+merge_data <- read_csv("/users/jasmine.moffett/Desktop/temp_data/srf_data_FINAL/Master_Merge.csv") %>%
+  clean_names()%>%
+  mutate(location = str_trim(site), #get rid of spacing inconsistencies in location names
+         date=as.Date(timestamp, format = "%Y-%m-%d") # make sure date var is registering as date
+  )
+
+unique(year(merge_data$timestamp))
+
+
+#only keep sites of interest 
+sites_keep <- c("BC Efish", "Puma", "Weir", "MillBridge")
+
+
+merge_data <- merge_data %>%
+  filter(location %in% sites_keep) 
+
+yr_2022 <- merge_data %>%
+  filter(year(date) == 2022)
+
+unique_names_2022 <- unique(yr_2022$site)
+
+print(unique_names_2022)
+
+
+#calc daily temp 
+daily_temp22 <- yr_2022 %>%
+  group_by(location, date) %>%  #group temp values by date 
+  summarise(daily_mean_temp = mean(temperature, na.rm= TRUE)) %>% #calc max temp per day, ensure there are no NAs 
+  ungroup()
+
+
+missing_summary <- daily_temp22 %>%
+  group_by(location) %>%
+  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  group_by(location) %>%
+  summarise(
+    total_days = n(),
+    missing_days = sum(is_missing),
+    percent_missing = round(100 * missing_days / total_days, 2),
+    .groups = "drop"
+  )
+
+print(missing_summary)
+
+
+
+gap_report <- daily_temp22 %>%
+  # 1. Start with your specific locations (Optional)
+  # filter(location %in% c("Big Creek", "Stone River")) %>% 
+  
+  filter(date >= as.Date("2022-06-01") & date <= as.Date("2022-10-31")) %>%
+  
+  group_by(location) %>%
+  complete(date = seq.Date(as.Date("2022-06-01"), as.Date("2022-10-31"),
+                           be = "day" )) %>%
+  
+  
+  # 3. Identify missing temperature values
+  mutate(is_missing = is.na(daily_mean_temp)) %>%
+  
+  # 4. Create a unique ID for each continuous "run" of NAs
+  mutate(gap_id = cumsum(is_missing != lag(is_missing, default = first(is_missing)))) %>%
+  
+  # 5. Filter for only the missing rows
+  filter(is_missing) %>%
+  
+  # 6. CRITICAL: Group by BOTH location and gap_id
+  group_by(location, gap_id) %>%
+  summarize(
+    gap_start = min(date),
+    gap_end = max(date),
+    days_missing = n(),
+    .groups = "drop" # Keeps the output clean
+  ) %>%
+  
+  # 7. Remove the helper ID
+  dplyr::select(-gap_id)
+
+print(gap_report)
 
 # 4. Quick Summary
 cat("Number of days both sites have data:", nrow(common_days_US), "\n")
