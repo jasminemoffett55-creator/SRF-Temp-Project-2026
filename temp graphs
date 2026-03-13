@@ -1,0 +1,33 @@
+library(tidyverse)
+library(janitor)
+library(lubridate)
+
+yr2025 <- read_csv("C:/Users/eliza.pease/Desktop/temp_data/data/Master_Merge.csv") %>%
+  clean_names()%>%
+  mutate(location = str_trim(site), #get rid of spacing inconsistencies in location names
+         datetime = ymd_hms(timestamp), #parse iso 
+         date = as.Date(datetime) #extract only date
+  ) %>%
+ filter(date >= as.Date("2025-06-01") & date <= as.Date("2025-10-31"))  # filter date range
+
+
+
+unique_names_2025 <- unique(yr2025$location)
+
+print(unique_names_2025)
+
+
+ggplot(yr2025, aes(x = date, y = temperature)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  facet_wrap(~ location) +
+  scale_x_date(
+    limits = as.Date(c("2025-06-01", "2025-10-31")),  # force x-axis range
+    date_breaks = "1 month",
+    date_labels = "%b"  # show month abbreviations
+  ) +
+  labs(
+    title = "Temperature Over Time by Site (2025)",
+    x = "Date",
+    y = "Temperature (°C)"
+  ) +
+  theme_bw()
