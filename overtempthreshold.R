@@ -76,9 +76,9 @@ WQ16 <- WQ16_summary %>%
    labs(title = "Days over 16 per Location",
        x = "Location",
        y = "Number of Days")
-
-
-  
+###################################
+##CONSEC DAYS#############
+ ############################ 
   
 WQ2014_abv16deg$consec <- with(rle(WQ2014_abv16deg$threshold), unlist(Map(`*`, sapply(lengths, seq.int), values)))
 
