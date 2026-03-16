@@ -1,0 +1,25 @@
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(dplyr)
+library(slider)
+
+master2 <- readRDS("C:/Users/eliza.pease/Desktop/temp_data/data/SRF_dataset5.rds") %>%
+  clean_names()%>%
+  dplyr:: select(timestamp, site, temperature) %>%
+  mutate(site = str_trim(site), #get rid of spacing inconsistencies in location names
+         datetime = as.Date(timestamp), 
+         year = year(datetime)
+  ) 
+
+pumamax <- master2 %>%
+  filter(site == "Puma")
+
+
+max_by_yr <- pumamax %>%
+  filter(month(datetime) %in% 6:10) %>%
+  group_by(year) %>%
+  slice_max(temperature, n = 1, with_ties = FALSE) %>%  # get the single max value per year
+  mutate(week = isoweek(datetime)) %>% 
+  select(year, datetime, week, max_temp = temperature) %>%
+  ungroup()
