@@ -1,0 +1,60 @@
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(dplyr)
+library(slider)
+
+master2 <- readRDS("C:/Users/eliza.pease/Desktop/temp_data/data/SRF_dataset5.rds") %>%
+  clean_names()%>%
+  dplyr:: select(timestamp, site, temperature) %>%
+  mutate(site = str_trim(site), #get rid of spacing inconsistencies in location names
+         datetime = as.Date(timestamp)
+        ) 
+
+unique_names_master <- unique(master2$site)
+
+print(unique_names_master)
+
+
+
+weir <- master2 %>%
+  filter(site == "Weir")
+
+
+
+daily_temp <- weir %>% #creates dataframe with mean temps 
+  group_by(datetime) %>% #split data into groups based on unique combo of loc/date
+  summarise(daily_mean_temp = mean(temperature, na.rm=TRUE), #take all temp readings for one day and ignore missing values within the day, compute avg and save it in new col 
+            .groups = "drop")
+
+
+daily_temp <- daily_temp %>%
+  reframe(
+    datetime = seq(min(datetime), max(datetime), by = "day")
+  ) %>%
+  # Join the actual temp data back in
+  left_join(daily_temp, by = c("datetime")) %>%
+  # Calculate rolling average within each site's specific range
+  arrange(datetime) %>%
+  mutate(
+    rolling_7d_mean = slide_index_dbl(
+      daily_mean_temp,
+      datetime, 
+      mean, 
+      .before= days(6),
+      .complete = FALSE,
+      na.rm= TRUE
+    )
+  ) %>%
+  ungroup()
+
+
+
+MWAT_by_yr_filtered <- daily_temp %>% 
+  filter(month(datetime) %in% 6:10) %>%
+  mutate(year = year(datetime)) %>%
+  group_by(year) %>%
+  slice_max(rolling_7d_mean, n = 1, with_ties = FALSE) %>% 
+  mutate(week = isoweek(datetime)) %>% 
+  select(year, datetime, week, MWAT_val = rolling_7d_mean) %>%
+  ungroup()
