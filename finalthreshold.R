@@ -5,6 +5,7 @@ library(ggplot2)
 library(zoo)
 library(tidyr)
 library(slider)
+library(ggpubr)
 
 setwd("C:/Users/asher.wescott/Desktop/srfdata")
 
@@ -473,6 +474,34 @@ abv18con2025 <- WQ2025_abv18deg %>%
 
 abv18con2025
 ######################
+abv18master <- do.call(rbind, list(WQ2014_abv18deg, WQ2015_abv18deg, WQ2016_abv18deg, WQ2017_abv18deg, WQ2018_abv18deg, WQ2019_abv18deg, WQ2020_abv18deg, WQ2021_abv18deg, WQ2022_abv18deg, WQ2023_abv18deg, WQ2024_abv18deg, WQ2025_abv18deg))
+
+
+
+unique(abv18master$site)
+
+
+abv18master <- abv18master %>%
+  mutate(
+    year = factor(year(timestamp)))
+
+mastergraph <- abv18master %>%
+  group_by(site, year) %>%
+  summarize(max_value = max(consec, na.rm = TRUE), .groups = 'drop') %>%
+  ggplot(aes(x=year, y=max_value, color=site, shape=site, group=site, label = max_value)) +
+  geom_line() +
+  geom_vline(xintercept = 7.65, color = "red", linewidth = 2) +
+  geom_point(size = 3) +
+  labs(y = "Maximum Number of Consecutive days over 18 ", x = "Year") +
+  annotate("text", x = 5, y = 100, label = "CZU fire starts Aug 16th, 2020")
+mastergraph
+
+
+
+
+
+
+#######################
 WQ2014_abv20deg <- massive %>%
   filter(date >= "2014-06-1" & timestamp <= "2014-10-31") %>%
   filter(!is.na(temperature)) %>% 
@@ -910,6 +939,36 @@ abv20con2025 <- WQ2025_abv20deg %>%
   labs(title = "Maximum number of consecutive days over 20",
        x = "Location",
        y = "Max Number of Consecutive Days")
+
+
+
+abv20con2025
+##############
+abv20master <- do.call(rbind, list(WQ2014_abv20deg, WQ2015_abv20deg, WQ2016_abv20deg, WQ2017_abv20deg, WQ2018_abv20deg, WQ2019_abv20deg, WQ2020_abv20deg, WQ2021_abv20deg, WQ2022_abv20deg, WQ2023_abv20deg, WQ2024_abv20deg, WQ2025_abv20deg))
+
+
+
+unique(abv20master$site)
+
+
+abv20master <- abv20master %>%
+  mutate(
+    year = factor(year(timestamp)))
+
+mastergraph20 <- abv20master %>%
+  group_by(site, year) %>%
+  summarize(max_value = max(consec, na.rm = TRUE), .groups = 'drop') %>%
+  ggplot(aes(x=year, y=max_value, color=site, shape=site, group=site, label = max_value)) +
+  geom_line() +
+  geom_vline(xintercept = 7.65, color = "red", linewidth = 2) +
+  geom_point(size = 3) +
+  labs(y = "Maximum Number of Consecutive days over 20 ", x = "Year") +
+  annotate("text", x = 5, y = 20, label = "CZU fire starts Aug 16th, 2020")
+mastergraph20
+
+
+consec_panel <- ggarrange(mastergraph, mastergraph20, ncol = 1, common.legend = TRUE)
+consec_panel  
 
 
 
