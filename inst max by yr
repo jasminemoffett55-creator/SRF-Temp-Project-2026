@@ -63,3 +63,57 @@ ggplot(combined_max, aes(x=year, y= max_temp, color = site)) +
     color = "Site"
     ) +
    theme_minimal()
+
+
+
+#----------------------------------
+
+
+
+
+
+
+weir_na_summary <- master2 %>%
+  filter(site == "Weir") %>%
+  filter(month(datetime) %in% 6:10) %>%   # June–October
+  group_by(year) %>%
+  summarise(
+    na_count = sum(is.na(temperature)),
+    total_obs = n(),
+    pct_na = na_count / total_obs * 100
+  ) %>%
+  ungroup()
+
+weir_na_summary
+
+puma_na_summary <- master2 %>%
+  filter(site == "Puma") %>%
+  filter(month(datetime) %in% 6:10) %>%   # June–October
+  group_by(year) %>%
+  summarise(
+    na_count = sum(is.na(temperature)),
+    total_obs = n(),
+    pct_na = na_count / total_obs * 100
+  ) %>%
+  ungroup()
+
+puma_na_summary
+
+
+
+
+lagoon_na_summary <- master2 %>%
+  filter(site == "Lagoon") %>%
+  filter(month(datetime) %in% 6:10) %>%
+  group_by(year) %>%
+  summarise(
+    na_count = sum(is.na(temperature)),
+    total_obs = n(),
+    .groups = "drop"
+  ) %>%
+  complete(year = full_seq(year, 1), fill = list(na_count = 0, total_obs = 0)) %>%
+  mutate(
+    pct_na = ifelse(total_obs == 0, 100, na_count / total_obs * 100)
+  )
+lagoon_na_summary
+  
