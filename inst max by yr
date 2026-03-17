@@ -23,3 +23,43 @@ max_by_yr <- pumamax %>%
   mutate(week = isoweek(datetime)) %>% 
   select(year, datetime, week, max_temp = temperature) %>%
   ungroup()
+
+
+#-------------------------
+weirmax <- master2 %>%
+  filter(site == "Weir")
+
+
+max_by_yr_weir <- weirmax %>%
+  filter(month(datetime) %in% 6:10) %>%
+  group_by(year) %>%
+  slice_max(temperature, n = 1, with_ties = FALSE) %>%  # get the single max value per year
+  mutate(week = isoweek(datetime)) %>% 
+  select(year, datetime, week, max_temp = temperature) %>%
+  ungroup()
+
+
+#---------------------
+
+combined_max <- bind_rows(
+  max_by_yr %>% mutate(site="Puma"), 
+  max_by_yr_weir %>% mutate(site = "Weir")
+)
+
+
+
+
+#plot yrly max value  
+ggplot(combined_max, aes(x=year, y= max_temp, color = site)) + 
+  geom_line(alpha = 0.6) +
+  geom_point() +
+  geom_vline(xintercept = 2020, color = "red") +
+  geom_text(aes(label = format(datetime, "%Y-%m-%d")), 
+            vjust = -0.7, size = 3, show.legend = FALSE) + 
+  labs(
+    title = "Yearly Instantaneous Maximum Temperature",
+    x = "Year",
+    y= "Temperature (°C)",
+    color = "Site"
+    ) +
+   theme_minimal()
