@@ -1,13 +1,13 @@
 ---
-title: "Stream Temperature Response to the August 2020 CZU Wildfire"
+  title: "Stream Temperature Response to the August 2020 CZU Wildfire"
 subtitle: "Pre- vs. Post-Fire Thermal Regime Analysis (Jun 1 - Oct 31)"
 author: "Joseph D. Kiernan"
 output: 
   html_document:
-    toc: true
-    theme: cosmo
+  toc: true
+theme: cosmo
 ---
-```{r setup, include=FALSE}
+  ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10, fig.height = 7)
 library(tidyverse)
 library(lubridate)
@@ -140,7 +140,7 @@ if(nrow(high_cor_table) > 0) {
 }
 ```
 # Perform site merging
-Based on the information above, the logical candidates for data merging based on proximity are "Big Creek" and BCEfish" (($r$) > 0.95) and "Puma" and "UpperScottCreek" (($r$) > 0.93). The next chunk of code performs these merges and also re-codes the site names for simplicity and aesthetics in all downstream analysis and data visualization chunks.
+Based on the information above, the logical candidates for data merging based on proximity are "Big Creek" and "BCEfish" (($r$) > 0.95) and "Puma" and "UpperScottCreek" (($r$) > 0.93). The next chunk of code performs these merges and also re-codes the site names for simplicity and aesthetics in all downstream analysis and data visualization chunks.
 
 ```{r site merging}
 # Merging Function
@@ -499,23 +499,23 @@ p3 <- ggplot(annual_metrics_plot, aes(x = site, y = MWMT, fill = period)) +
     axis.text.x = element_text(size = 16, face = "bold", color = "black"),
     axis.title.x = element_text(size = 16, face = "bold", margin = margin(t = 15))
   )
-fig1_panel <- (p2 / p3) + plot_annotation(title = "Figure 2: Stream thermal comparisons: Pre-fire vs. post-fire",
-    theme = theme(plot.title = element_text(size = 22, face = "bold")))
+fig1_panel <- (p2 / p3) + plot_annotation(title = "Figure 3: Stream thermal comparisons: Pre-fire vs. post-fire",
+                                          theme = theme(plot.title = element_text(size = 22, face = "bold")))
 fig1_panel
 
 ggsave(
-  filename = "Figure1_Temperature_Magnitude_v7.png", 
+  filename = "Figure3_Temperature_Magnitude_v7.png", 
   plot = fig1_panel, 
   width = 14.31, 
   height = 8.26, 
   units = "in", 
-  dpi = 300
+  dpi = 700
 )
 
 getwd()
 
 ```
- 
+
 
 
 
@@ -538,9 +538,9 @@ plot_stats <- plot_data %>%
 
 # Calculate max limits for standardization
 max_total  <- max(plot_stats$mean_val[grepl("Days", plot_stats$Metric)] + 
-                  plot_stats$se_val[grepl("Days", plot_stats$Metric)], na.rm = TRUE)
+                    plot_stats$se_val[grepl("Days", plot_stats$Metric)], na.rm = TRUE)
 max_consec <- max(plot_stats$mean_val[grepl("Consec", plot_stats$Metric)] + 
-                  plot_stats$se_val[grepl("Consec", plot_stats$Metric)], na.rm = TRUE)
+                    plot_stats$se_val[grepl("Consec", plot_stats$Metric)], na.rm = TRUE)
 
 # Helper Function with Integrated Spacing
 create_sq_plot <- function(m_name, title_lab, p_tag, show_x = TRUE, show_y = TRUE, y_lab = "Days", y_lim) {
@@ -566,7 +566,7 @@ create_sq_plot <- function(m_name, title_lab, p_tag, show_x = TRUE, show_y = TRU
       plot.margin = margin(t = 15, r = 5, b = 15, l = 5) 
     )
   
-
+  
   # X-axis logic
   if(!show_x) {
     p <- p + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
@@ -601,7 +601,7 @@ combined_output <- (pA | pB | pC) / (pD | pE | pF)
 final_plot <- combined_output + 
   plot_layout(guides = "collect") + 
   plot_annotation(
-    title = "Figure 3: Thermal stress threshold analysis: Pre-fire vs. post-fire",
+    title = "Figure 4: Thermal stress threshold analysis: Pre-fire vs. post-fire",
     theme = theme(
       plot.title = element_text(size = 26, face = "bold"),
       plot.subtitle = element_text(size = 18, face = "italic")
@@ -615,12 +615,12 @@ final_plot <- combined_output +
 
 
 ggsave(
-  filename = "Figure3_Temperature_Magnitude_v7.png", 
+  filename = "Figure4_Temperature_Magnitude_v7.png", 
   plot = final_plot, 
-  width = 14, 
+  width = 20, 
   height = 12, 
   units = "in", 
-  dpi = 300
+  dpi = 700
 )
 
 
@@ -630,8 +630,8 @@ final_plot
 
 # Timing shift visualization: Boxplot of julian days
 Visualizing the timing shift of "peak heat" is a way to examine the loss of thermal buffering in the watershed. Following wildfire, the removal of riparian canopy often causes the stream to track solar radiation more closely, frequently shifting the MWMT (Maximum Weekly Maximum Temperature) to an earlier date in the summer. In our case, it appears there was a differential shift in the tributaries relative to the mainstem - this is counter to my expectation based on wildfire burn intensity in the basin (in fact we may want to investigate how these two things are correlated)?
-
-```{r timing shift plot, fig.height = 8, fig.width = 11}
+  
+  ```{r timing shift plot, fig.height = 8, fig.width = 11}
 # Calculate the Delta (Mean Change)
 timing_deltas <- annual_metrics %>%
   filter(year != 2020) %>% #Excludes 2020 fire year
@@ -658,7 +658,7 @@ timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
   # Add Delta Labels just above the Site Codes
   geom_text(data = timing_deltas, aes(x = site, y = y_pos, label = label),
             fontface = "bold", size = 5, color = "black") +
-
+  
   # Scale and color formatting
   scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
   scale_y_continuous(
@@ -669,7 +669,7 @@ timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
   
   # Labels and theme
   labs(
-    title = "Figure 4. Shift in timing of peak thermal conditions (MWMT)",
+    title = "Figure 5. Shift in timing of peak thermal conditions (MWMT)",
     subtitle = "Delta (Δ) represents the mean change in days from Pre- to Post-Fire",
     y = "Date of peak temperature (MWMT)",
     x = "Site"
@@ -688,11 +688,11 @@ timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
   )
 
 ggsave(
-  filename = "Figure4_Temperature_timing3.png", 
+  filename = "Figure5_Temperature_timing3.png", 
   plot = timing_plot, 
   width = 14, 
   height = 8, 
   units = "in", 
-  dpi = 300
+  dpi = 700
 )
 ```
