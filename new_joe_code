@@ -421,7 +421,7 @@ save_kable(metrics_table, file = "metrics2.png")
 # 1. EXCLUDE 2020 and ensure Factor Order
 annual_metrics_plot <- annual_metrics %>%
   filter(year != 2020) %>%
-  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+  mutate(site = factor(site, levels = c("SC1", "SC2","SC3", "BC", "MC")))
 
 # 2. Common theme with padding and vertical spacing
 common_theme <- theme_classic() + 
@@ -499,12 +499,11 @@ p3 <- ggplot(annual_metrics_plot, aes(x = site, y = MWMT, fill = period)) +
     axis.text.x = element_text(size = 16, face = "bold", color = "black"),
     axis.title.x = element_text(size = 16, face = "bold", margin = margin(t = 15))
   )
-fig1_panel <- (p2 / p3) + plot_annotation(title = "Figure 3: Stream thermal comparisons: Pre-fire vs. post-fire",
-                                          theme = theme(plot.title = element_text(size = 22, face = "bold")))
+fig1_panel <- (p2 / p3)
 fig1_panel
 
 ggsave(
-  filename = "Figure3_Temperature_Magnitude_v7.png", 
+  filename = "C:/Users/asher.wescott/Desktop/srfdata/graphs/Figure3_Temperature_Magnitude_v7.png", 
   plot = fig1_panel, 
   width = 14.31, 
   height = 8.26, 
@@ -523,7 +522,7 @@ getwd()
 ```{r threshold-and-cumulative-plots, fig.height = 11, fig.width = 15}
 plot_data <- annual_metrics %>% 
   filter(year != 2020) %>% #Excludes 2020 fire year
-  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+  mutate(site = factor(site, levels = c("SC1", "SC2", "SC3", "BC", "MC")))
 
 # Calculate Summary Stats
 plot_stats <- plot_data %>%
@@ -600,13 +599,6 @@ combined_output <- (pA | pB | pC) / (pD | pE | pF)
 
 final_plot <- combined_output + 
   plot_layout(guides = "collect") + 
-  plot_annotation(
-    title = "Figure 4: Thermal stress threshold analysis: Pre-fire vs. post-fire",
-    theme = theme(
-      plot.title = element_text(size = 26, face = "bold"),
-      plot.subtitle = element_text(size = 18, face = "italic")
-    )
-  ) & 
   theme(
     legend.position = "bottom", 
     legend.text = element_text(size = 18, face = "bold"),
@@ -615,7 +607,7 @@ final_plot <- combined_output +
 
 
 ggsave(
-  filename = "Figure4_Temperature_Magnitude_v7.png", 
+  filename = "C:/Users/asher.wescott/Desktop/srfdata/graphs/Figure4_Temperature_Magnitude_v7.png", 
   plot = final_plot, 
   width = 20, 
   height = 12, 
@@ -646,7 +638,7 @@ timing_deltas <- annual_metrics %>%
 
 # Update Factor Order
 annual_metrics <- annual_metrics %>%
-  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+  mutate(site = factor(site, levels = c("SC1", "SC2", "SC3", "BC", "MC")))
 
 # Plot with bottom-aligned Delta annotations
 timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
@@ -669,15 +661,12 @@ timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
   
   # Labels and theme
   labs(
-    title = "Figure 5. Shift in timing of peak thermal conditions (MWMT)",
     subtitle = "Delta (Δ) represents the mean change in days from Pre- to Post-Fire",
     y = "Date of peak temperature (MWMT)",
     x = "Site"
   ) +
   theme_classic() +
   theme(
-    axis.text = element_text(size = 16, face = "bold", color = "black"),
-    axis.title = element_text(size = 16, face = "bold"),
     axis.line = element_line(linewidth = 1),
     legend.position = c(0.98, 0.98),
     legend.justification = c("right", "top"),
@@ -688,11 +677,12 @@ timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
   )
 
 ggsave(
-  filename = "Figure5_Temperature_timing3.png", 
+  filename = "C:/Users/asher.wescott/Desktop/srfdata/graphs/Figure5_Temperature_timing3.png", 
   plot = timing_plot, 
-  width = 14, 
-  height = 8, 
-  units = "in", 
+  width = 12, 
+  height = 7, 
+  units = "cm", 
+  scale = 1.7, 
   dpi = 700
 )
 ```
