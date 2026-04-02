@@ -1,0 +1,698 @@
+---
+title: "Stream Temperature Response to the August 2020 CZU Wildfire"
+subtitle: "Pre- vs. Post-Fire Thermal Regime Analysis (Jun 1 - Oct 31)"
+author: "Joseph D. Kiernan"
+output: 
+  html_document:
+    toc: true
+    theme: cosmo
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10, fig.height = 7)
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(knitr)
+library(kableExtra)
+library(patchwork)
+library(ggcorrplot)
+library(readxl)
+
+# ESTABLISH GLOBAL "HELPER" FUNCTIONS FOR THE PIPELINE
+safe_max <- function(x) {
+  if(all(is.na(x)) || length(x) == 0) return(NA_real_)
+  max(x, na.rm = TRUE)
+}
+
+max_consec <- function(temp_vector, threshold) {
+  if(all(is.na(temp_vector))) return(NA_integer_)
+  runs <- rle(temp_vector > threshold)
+  if(any(runs$values == TRUE)) {
+    return(max(runs$lengths[runs$values == TRUE]))
+  } else {
+    return(0)
+  }
+}
+```
+
+# Data loading and cleaning
+
+Here we derive the "site" name from the file name (everything left of the underscore) and standardize all data to an hourly "heartbeat" to account for potentially variable logging intervals at each temperature site. Specifically, if a logger recorded at 15 minute intervals and had multiple temperature measurements for a given hour, all valid records will be averaged to produce a single value. This step removes some of the noise in the data set and facilitates comparisons of thermal conditions across sites.
+
+```{r Data loading and filename parsing}
+
+file_list <- list.files("raw_data_files", full.names = TRUE, pattern = "\\.(csv|xlsx)$")
+
+read_temp_file <- function(path) {
+  fname <- basename(path)
+  derived_site <- str_split_i(fname, "_", 1) # Extract site from file name, left of underscore
+  
+  ext <- tools::file_ext(path)
+  dat <- if (ext == "csv") read_csv(path, show_col_types = FALSE) else read_excel(path)
+  
+  colnames(dat) <- tolower(colnames(dat))
+  dat %>%
+    rename(
+      temperature = any_of(c("temperature", "temp", "temperature c", "temp_c")),
+      timestamp = any_of(c("timestamp", "date_time", "datetime"))
+    ) %>%
+    mutate(
+      site = derived_site, 
+      temperature = as.numeric(temperature),
+      timestamp = as.character(timestamp),
+      bad_temperature = if("bad_temperature" %in% colnames(.)) bad_temperature else FALSE
+    ) %>%
+    select(timestamp, site, temperature, bad_temperature)
+}
+
+all_raw <- file_list %>% 
+  map_df(~read_temp_file(.x)) %>%
+  mutate(
+    ts_sync = round_date(parse_date_time(timestamp, orders = c("ymd HMS", "mdy HMS", "ymd", "mdy")), "1 hour"),
+    date = as.Date(ts_sync),
+    year = year(date),
+    month = month(date)
+  ) %>%
+  filter(month >= 6 & month <= 10) # Focus on the summer/fall salmonid index period, June 1 through October 31
+```
+
+# Documenting data provenance: Imported files
+The following files were successfully identified and processed from the `raw_data_files` directory.
+
+```{r Data import log}
+# Create a simple data frame for a clean table output
+import_log <- data.frame(
+  File_Name = basename(file_list),
+  Path = file_list
+)
+
+import_log %>%
+  kable(caption = "Table 1: Inventory of raw data sources (input files)") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+```
+
+# Correlation analysis: Decision support for potential site merging 
+In this section we identify proximate sites (within the same stream reach or segment) that contain highly correlated temperature time series data. High thermal synchrony ($r > 0.90$) provides the scientific justification for creating reach-scale composites. Correlation analyses focuses on June 1 through October 31 period of interest, rather than the complete annual time series.
+
+```{r Correlation analyses}
+site_mat_data <- all_raw %>%
+  group_by(ts_sync, site) %>%
+  summarise(temp = mean(temperature, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = site, values_from = temp) %>%
+  select(-ts_sync)
+
+ggcorrplot(cor(site_mat_data, use = "pairwise.complete.obs"), 
+           hc.order = TRUE, type = "lower", lab = TRUE, lab_size = 4,
+           title = "Figure 1: Thermal synchrony matrix (Jun 1 - Oct 31)") + theme_classic()
+```
+
+# Extracting highly correlated site pairs: Candidate sites for data merging
+The following table identifies all site pairs with a correlation coefficient ($r$) of 0.90 or higher. High values indicate that these sites are responding to the same thermal drivers.
+
+```{r Identify high correlation}
+# Extract the correlation matrix from the previous step
+cor_results <- cor(site_mat_data, use = "pairwise.complete.obs")
+
+# Convert the matrix into a long-form list for filtering
+high_cor_table <- cor_results %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Site_A") %>%
+  pivot_longer(cols = -Site_A, names_to = "Site_B", values_to = "r") %>%
+  # Filter for strong correlation and remove self-correlations
+  filter(r >= 0.90, Site_A != Site_B) %>%
+  # Alphabetically sort names to identify and remove duplicates (A-B vs B-A)
+  rowwise() %>%
+  mutate(pair_id = paste(sort(c(Site_A, Site_B)), collapse = "-")) %>%
+  ungroup() %>%
+  distinct(pair_id, .keep_all = TRUE) %>%
+  select(Site_A, Site_B, r) %>%
+  arrange(desc(r))
+
+# Display results using kable
+if(nrow(high_cor_table) > 0) {
+  high_cor_table %>%
+    kable(digits = 3, 
+          col.names = c("Primary Site", "Comparison Site", "Correlation (r)"),
+          caption = "Table 2: Candidate site pairs for data merging (r >= 0.90)") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  cat("No site pairs met the r >= 0.90 threshold.")
+}
+```
+# Perform site merging
+Based on the information above, the logical candidates for data merging based on proximity are "Big Creek" and BCEfish" (($r$) > 0.95) and "Puma" and "UpperScottCreek" (($r$) > 0.93). The next chunk of code performs these merges and also re-codes the site names for simplicity and aesthetics in all downstream analysis and data visualization chunks.
+
+```{r site merging}
+# Merging Function
+process_pair <- function(data, s1, s2, new_name) {
+  data %>%
+    filter(site %in% c(s1, s2), is.na(bad_temperature) | bad_temperature == FALSE) %>%
+    group_by(ts_sync, site) %>%
+    summarise(temperature = mean(temperature, na.rm = TRUE), .groups = "drop") %>%
+    pivot_wider(names_from = site, values_from = temperature) %>%
+    rowwise() %>%
+    mutate(temperature = mean(c_across(any_of(c(s1, s2))), na.rm = TRUE), site = new_name) %>%
+    ungroup() %>% select(timestamp = ts_sync, site, temperature)
+}
+
+# EXECUTE SPECIFIC MERGES
+# Based on correlation results (r >= 0.90), these are the only composite reaches we will generate
+pair_a <- process_pair(all_raw, "BigCreek", "BCEfish", "Big Creek")
+pair_b <- process_pair(all_raw, "Puma", "UpperScottCreek", "Upper Scott")
+
+# Identify independent sites
+merged_source_names <- c("BigCreek", "BCEfish", "Puma", "UpperScottCreek")
+
+other_sites <- all_raw %>%
+  filter(!(site %in% merged_source_names), is.na(bad_temperature) | bad_temperature == FALSE) %>%
+  select(timestamp = ts_sync, site, temperature)
+
+# Create master dataframe with re-coded site names
+df_final <- bind_rows(pair_a, pair_b, other_sites) %>%
+  mutate(
+    date = as.Date(timestamp), 
+    year = year(date), 
+    doy = yday(date),
+    # Explicitly define the three periods
+    period = case_when(
+      year < 2020 ~ "Pre-Fire",
+      year == 2020 ~ "Fire Year",
+      year > 2020 ~ "Post-Fire"
+    ),
+    period = factor(period, levels = c("Pre-Fire", "Fire Year", "Post-Fire")),
+    site = case_match(site,
+      "CombinedLagoonSites" ~ "SC1", #est
+      "Gage"                ~ "SC2", #lsc
+      "Big Creek"           ~ "BC", #bc
+      "MillBridge"          ~ "MC", #MC
+       "Upper Scott"         ~ "SC3", #USC
+      "Lagoon"              ~ "LAG",
+      "USEfish"             ~ "SUE",
+      "Weir"                ~ "WEIR",
+      .default = site
+    )
+  )
+```
+
+
+
+
+# Site lineage and consolidation
+This table documents the transition from raw temperature sensor locations to the reduced list of single site and composited sites/reaches. 
+Consolidation was performed for two pairs with high thermal synchrony ($r \ge 0.90$).
+
+```{r site lineage table}
+# Define the lineage mapping
+lineage_map <- data.frame(
+  Final_Code = c("SC1", "SC2", "BC", "MC", "SC3", "LAG", "SUE", "WEIR"),
+  Original_Sources = c( "CombinedLagoonSites", "Gage",  "BigCreek, BCEfish",  "MillBridge", "Puma, UpperScottCreek", "Lagoon (raw)", "USEfish", "Weir"
+  ),
+  Type = c(rep("Composite Reach", 2), rep("Independent Site", 6))
+)
+
+# Filter lineage to only show sites present in the final data
+lineage_data <- lineage_map %>%
+  filter(Final_Code %in% unique(df_final$site))
+
+# Generate Table
+lineage_data %>%
+  arrange(Type, Final_Code) %>%
+  kable(col.names = c("Site Code", "Original Data Source(s)", "Status"),
+        caption = "Table 3: Site Lineage: Analytical Codes and Data Sources") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
+  column_spec(1, bold = TRUE) %>%
+  row_spec(which(lineage_data$Type == "Composite Reach"), background = "#f0f7ff")
+```
+
+# Data screening and completeness
+Examine the completeness of the data set before running any temperature metrics.
+
+```{r Combined site validation}
+completeness_summary <- df_final %>%
+  group_by(site, period, year) %>%
+  summarise(days_present = n_distinct(date),
+            percent_complete = round((days_present / 153) * 100, 1), .groups = 'drop') %>%
+  arrange(site, period, year)
+
+completeness_summary %>%
+  kable(caption = "Table 4: Data completeness summary, period Jun 1 - Oct 31. Years in red fail to meet completeness criteria") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  collapse_rows(columns = 1:2, valign = "top") %>%
+  row_spec(which(completeness_summary$percent_complete < 65), color = "red")
+```
+
+# Reduce the data set to remove the fire event and any site-years with insufficient data. 
+Based on geographic proximity, we will remove sites (1) "SUE" (redundant with "USC"), (2) "LAG" (redundant with "EST") and (3) "Weir" (redundant with "LSC") from all subsequent analysis. We also remove all years from the remaining sites where "percent complete" (of the Jun 1 to Oct 31 time series) is less than the 65% threshold. Note: A full Jun 1 - Oct 31 record is 153 days and 65% of this summer period is approx 100 days. We also remove all data from the year 2020 as this is the disturbance year and not representative of either the pre- or post-fire periods.
+
+The last bit of this chunk exports a copy of the final "Analysis-Ready" data set (file "CZU_StreamTemp_Cleaned_Final.csv"), saving it to the working directory. This is a professional standard for ensuring reproducibility and providing a clean hand-off for colleagues and/or reviewers. This is the data set that should be used for all analyses.
+
+```{r Data screening and filtering}
+# Identify valid site-year pairs based on the 65% threshold
+valid_years <- completeness_summary %>%
+  filter(percent_complete >= 65) %>%
+  select(site, year)
+
+# Filter the master dataframe
+df_cleaned <- df_final %>%
+  filter(!(site %in% c("SUE", "LAG", "WEIR"))) %>%
+  semi_join(valid_years, by = c("site", "year"))
+
+df_cleaned <- df_cleaned %>% filter(year != 2020) # this line removes to 2020 (disturbance) data
+
+
+# Export and save
+# Save as CSV for general use
+write_csv(df_cleaned, "CZU_StreamTemp_Cleaned_Final.csv")
+
+# Save as RDS to preserve R-specific metadata
+saveRDS(df_cleaned, "CZU_StreamTemp_Cleaned_Final.rds")
+
+# Verification message
+cat("Export Complete: 'CZU_StreamTemp_Cleaned_Final.csv' saved to working directory.")
+```
+
+#Final Dataset Inventory
+This summary confirms the composition of the 'cleaned' dataset used for all subsequent metrics and visualizations.
+
+```{r Final data inventory}
+# Use df_cleaned to summarize all available site-years
+data_inventory <- df_cleaned %>%
+  group_by(site) %>%
+  summarise(
+    Pre_Fire_Years  = n_distinct(year[period == "Pre-Fire"]),
+    Fire_Year       = n_distinct(year[period == "Fire Year"]),
+    Post_Fire_Years = n_distinct(year[period == "Post-Fire"]),
+    Total_Observations = n(),
+    Start_Date = min(date),
+    End_Date = max(date),
+    .groups = 'drop'
+  )
+
+# Display as a clean table
+data_inventory <- df_cleaned %>%
+  group_by(site) %>%
+  summarise(
+    Pre_Fire_Years  = n_distinct(year[period == "Pre-Fire"]),
+    Fire_Year       = n_distinct(year[period == "Fire Year"]),
+    Post_Fire_Years = n_distinct(year[period == "Post-Fire"]),
+    Total_Observations = n(),
+    Start_Date = min(date),
+    End_Date = max(date),
+    .groups = 'drop'
+  )
+
+# Display the inventory table with 3-period counts
+data_inventory %>%
+  kable(col.names = c("Site Code", "Pre-Fire Years", "Fire Year (2020)", "Post-Fire Years", 
+                      "Total Hourly Records", "Earliest Date", "Latest Date"),
+        caption = "Table 5: Inventory of analysis-ready stream temperature data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(2:4, background = "#fcfcfc")
+```
+# Calculating stream temperature metrics
+Stream temperature metrics modified from Heck, M.P., Schultz, L.D., Hockman-Wert, D., Dinger, E.C., and Dunham, J.B., 2018, Monitoring stream temperatures—A guide for non-specialists: U.S. Geological Survey Techniques and Methods, book 3, chap. A25, 76 p., *https://doi.org/10.3133/tm3A25*. 
+
+```{r metric calculations on cleaned data}
+# Daily summaries on cleaned data
+daily_summary <- df_cleaned %>%
+  group_by(site, date, year, doy, period) %>%
+  summarise(
+    d_max = if(any(!is.na(temperature))) max(temperature, na.rm = TRUE) else NA_real_,
+    d_mean = mean(temperature, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  filter(is.finite(d_max))
+
+# Comprehensive Annual Metrics (13 Indicators form Heck et al. 2018)
+annual_metrics <- daily_summary %>%
+  group_by(site, year, period) %>%
+  arrange(date) %>%
+  mutate(
+    roll7_max = rollmean(d_max, 7, fill = NA, align = "right"),
+    roll7_mean = rollmean(d_mean, 7, fill = NA, align = "right")
+  ) %>%
+  summarise(
+    days_in_record = n(),
+    # Magnitude
+    Max_Temp = safe_max(d_max),
+    MWMT = safe_max(roll7_max),
+    MWAT = safe_max(roll7_mean),
+    # Timing
+    MWMT_DOY = if(!is.na(MWMT)) doy[which.max(roll7_max)] else NA_integer_,
+    # Variability and range
+    Mean_Range = max(d_mean) - min(d_mean),
+    Max_Range = max(d_max) - min(d_max), 
+    Mean_Var = var(d_mean),
+    Max_Var = var(d_max),
+    # Threshold Counts
+    Days_16C = sum(d_max > 16),
+    Days_18C = sum(d_max > 18), 
+    Days_20C = sum(d_max > 20),
+    # Duration (Consecutive Streak) counts
+    Consec_16C = max_consec(d_max, 16),
+    Consec_18C = max_consec(d_max, 18),
+    Consec_20C = max_consec(d_max, 20),
+    .groups = 'drop'
+  )
+```
+
+# Generate summary table of stream temperature metrics
+1. Thermal Magnitude and Timing Metrics.
+Maximum Temp ($T_{max}$): The single warmest instantaneous temperature recorded during the summer index period.
+MWMT (Max Weekly Max Temp): The highest 7-day rolling average of daily maximum temperatures. 
+MWAT (Max Weekly Average Temp): The highest 7-day rolling average of daily mean temperatures. This identifies the "chronic" thermal floor that fish must endure even at night.
+MWMT (Julian Day): The day of the year (1–366) when the MWMT occurred. A shift to an earlier Peak Day post-fire may indicate a loss of riparian canopy that previously buffered early-summer solar radiation.
+
+2. Variability and Range Metrics
+Mean/Max Range: The difference between the highest and lowest daily mean or maximum values. 
+Mean/Max Variance: A statistical measure of how much temperatures fluctuate around the average. High variance post-fire often points to increased vulnerability to solar heating after the canopy is removed.
+
+3. Threshold and Duration Metrics (Biological Stress).
+Days > 16, 18, 20°C: The total count of days where the daily maximum exceeded these thresholds. For example, $18^{\circ}C$ is a standard regulatory threshold in many Western states for maintaining suitable salmonid habitat.
+Consec. Days > 16, 18, 20°C: The longest continuous "streak" of days above a threshold.
+
+```{r summary table}
+# Calculate Averages by Site and Period (Excluding Fire Year)
+table_long <- annual_metrics %>%
+  filter(period != "Fire Year") %>% # Exclude 2020 disturbance year
+  group_by(site, period) %>%
+  summarise(across(c(Max_Temp:Consec_20C, MWMT_DOY), \(x) mean(x, na.rm = TRUE)), .groups = "drop") %>%
+  # IMPORTANT: This step creates the 'Value' column required by pivot_wider
+  pivot_longer(cols = -c(site, period), names_to = "Metric", values_to = "Value")
+
+# Reshape for Side-by-Side Comparison
+final_table_df <- table_long %>%
+  pivot_wider(names_from = period, values_from = Value) %>%
+  mutate(
+    `Change (Δ)` = `Post-Fire` - `Pre-Fire`,
+    Metric = case_when(
+      Metric == "Max_Temp"   ~ "Maximum Temp (°C)",
+      Metric == "MWMT"       ~ "MWMT (°C)",
+      Metric == "MWAT"       ~ "MWAT (°C)",
+      Metric == "MWMT_DOY"   ~ "MWMT (Julian Day)",
+      Metric == "Mean_Range" ~ "Mean Range",
+      Metric == "Max_Range"  ~ "Max Range",
+      Metric == "Days_18C"   ~ "Days > 18 °C",
+      Metric == "Consec_18C" ~ "Consec. Days > 18 °C",
+      TRUE ~ Metric 
+    )
+  ) %>%
+  arrange(site, Metric)
+
+# Formatted Output
+metrics_table <- final_table_df %>%
+  kable(digits = 1, caption = "Table 6: Temperature Regime Shift Analysis (Excluding 2020 Fire Year)", na.string = "-") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = TRUE) %>%
+  column_spec(4, color = "#d7191c") %>%
+  column_spec(5, bold = TRUE, background = "#f9f9f9") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+metrics_table
+```
+install.packages("webshot2")
+library(kableExtra)
+save_kable(metrics_table, file = "metrics2.png")
+
+
+
+# Temperature magnitude box plots
+```{r magnitude panel plot, fig.height = 11, fig.width = 10}
+# 1. EXCLUDE 2020 and ensure Factor Order
+annual_metrics_plot <- annual_metrics %>%
+  filter(year != 2020) %>%
+  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+
+# 2. Common theme with padding and vertical spacing
+common_theme <- theme_classic() + 
+  theme(
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(size = 16, face = "bold", color = "black"),
+    axis.title.y = element_text(size = 16, face = "bold", margin = margin(r = 15)),
+    legend.position = "none",
+    plot.title = element_text(size = 18, face = "bold"),
+    plot.margin = margin(t = 15, r = 5, b = 15, l = 5) 
+  )
+
+y_scale_config <- scale_y_continuous(breaks = seq(0, 30, by = 2), labels = function(x) round(x, 0))
+
+# # Plot A: Max Temp (Tmax) with Boxed Legend
+# #p1 <- ggplot(annual_metrics_plot, aes(x = site, y = Max_Temp, fill = period)) +
+#   geom_boxplot(width = 0.5, outlier.shape = NA, alpha = 0.7, position = position_dodge(width = 0.8)) +
+#   geom_jitter(position = position_dodge(width = 0.8), alpha = 0.3, size = 1.5) +
+#   scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
+#   geom_hline(yintercept = 22, linetype = "dashed", color = "darkred") +
+#   annotate("text", x = 5.4, y = 21.7, label = "22*degree*C~'critical thermal threshold'", 
+#            parse = TRUE, hjust = 1, vjust = 1, size = 4.5, color = "darkred") +
+#   y_scale_config +
+#   labs(title = "A) Maximum annual water temperature", y = NULL) +
+#   common_theme +
+#   theme(
+#     legend.position = c(0.01, 0.99),
+#     legend.justification = c("left", "top"),
+#     # BOX THE LEGEND: Added color = "black" and background styling
+#     legend.background = element_rect(fill = alpha("white", 0.7), color = "black", linewidth = 0.5),
+#     legend.margin = margin(6, 10, 6, 6),
+#     legend.title = element_blank(),
+#     legend.text = element_text(size = 14, face = "bold")
+#   )
+
+# Plot A: MWAT with 18°C Stress Threshold
+p2 <- ggplot(annual_metrics_plot, aes(x = site, y = MWAT, fill = period)) +
+  geom_boxplot(width = 0.5, outlier.shape = NA, alpha = 0.7, position = position_dodge(width = 0.8)) +
+  geom_jitter(position = position_dodge(width = 0.8), alpha = 0.3, size = 1.5) +
+  scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
+  geom_hline(yintercept = 18, linetype = "dashed", color = "black") +
+  annotate("text", x = 5.4, y = 17.7, label = "18*degree*C~'thermal stress threshold'", 
+           parse = TRUE, hjust = 1, vjust = 1, size = 4.5, color = "black") +
+  y_scale_config +
+  labs(title = "A) Maximum weekly average temperature (MWAT) with 18°C Stress Threshold", 
+       y = expression(bold("Water temperature (" * degree * "C)"))) + 
+  common_theme +
+  theme(
+    legend.position = c(0.7, 0.99),
+    legend.justification = c("left", "top"),
+    # BOX THE LEGEND: Added color = "black" and background styling
+    legend.background = element_rect(fill = alpha("white", 0.7), color = "black", linewidth = 0.5),
+    legend.margin = margin(6, 10, 6, 6),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 14, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.tickets.x = element_blank()
+    
+    
+  )
+
+# Plot B: MWMT with 18°C Stress Threshold
+p3 <- ggplot(annual_metrics_plot, aes(x = site, y = MWMT, fill = period)) +
+  geom_boxplot(width = 0.5, outlier.shape = NA, alpha = 0.7, position = position_dodge(width = 0.8)) +
+  geom_jitter(position = position_dodge(width = 0.8), alpha = 0.3, size = 1.5) +
+  scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
+  geom_hline(yintercept = 20, linetype = "dashed", color = "black") +
+  annotate("text", x = 5.4, y = 19.7, label = "20*degree*C~'thermal stress threshold'", 
+           parse = TRUE, hjust = 1, vjust = 1, size = 4.5, color = "black") +
+  y_scale_config +
+  labs(title = "B) Maximum weekly maximum temperature (MWMT) with 20°C Stress Threshold", y = expression(bold("Water temperature (" * degree * "C)")), x = "Site") +
+  common_theme + 
+  theme(
+    axis.text.x = element_text(size = 16, face = "bold", color = "black"),
+    axis.title.x = element_text(size = 16, face = "bold", margin = margin(t = 15))
+  )
+fig1_panel <- (p2 / p3) + plot_annotation(title = "Figure 2: Stream thermal comparisons: Pre-fire vs. post-fire",
+    theme = theme(plot.title = element_text(size = 22, face = "bold")))
+fig1_panel
+
+ggsave(
+  filename = "Figure1_Temperature_Magnitude_v7.png", 
+  plot = fig1_panel, 
+  width = 14.31, 
+  height = 8.26, 
+  units = "in", 
+  dpi = 300
+)
+
+getwd()
+
+```
+ 
+
+
+
+# Threshold and cumulative stress plots
+```{r threshold-and-cumulative-plots, fig.height = 11, fig.width = 15}
+plot_data <- annual_metrics %>% 
+  filter(year != 2020) %>% #Excludes 2020 fire year
+  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+
+# Calculate Summary Stats
+plot_stats <- plot_data %>%
+  select(site, period, Days_16C, Days_18C, Days_20C, Consec_16C, Consec_18C, Consec_20C) %>%
+  pivot_longer(cols = -c(site, period), names_to = "Metric", values_to = "Value") %>%
+  group_by(site, period, Metric) %>%
+  summarise(
+    mean_val = mean(Value, na.rm = TRUE),
+    se_val = sd(Value, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# Calculate max limits for standardization
+max_total  <- max(plot_stats$mean_val[grepl("Days", plot_stats$Metric)] + 
+                  plot_stats$se_val[grepl("Days", plot_stats$Metric)], na.rm = TRUE)
+max_consec <- max(plot_stats$mean_val[grepl("Consec", plot_stats$Metric)] + 
+                  plot_stats$se_val[grepl("Consec", plot_stats$Metric)], na.rm = TRUE)
+
+# Helper Function with Integrated Spacing
+create_sq_plot <- function(m_name, title_lab, p_tag, show_x = TRUE, show_y = TRUE, y_lab = "Days", y_lim) {
+  y_breaks <- seq(0, ceiling(y_lim/25)*25, by = 25)
+  y_upper  <- max(y_breaks)
+  full_title <- paste0(p_tag, " ", title_lab)
+  
+  p <- ggplot(filter(plot_stats, Metric == m_name), aes(x = site, y = mean_val, fill = period)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8), alpha = 0.9, color = "white") +
+    geom_errorbar(aes(ymin = mean_val - se_val, ymax = mean_val + se_val), 
+                  position = position_dodge(width = 0.8), width = 0.2) +
+    scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
+    scale_y_continuous(limits = c(0, y_upper), breaks = y_breaks) +
+    labs(title = full_title, y = y_lab, x = "Site") +
+    theme_classic() +
+    theme(
+      axis.text = element_text(size = 16, face = "bold", color = "black"),
+      axis.title = element_text(size = 16, face = "bold"),
+      aspect.ratio = 1, 
+      legend.position = "none",
+      plot.title = element_text(size = 20, face = "bold", hjust = 0),
+      # ADDING WHITE SPACE: Adjusting the plot margins
+      plot.margin = margin(t = 15, r = 5, b = 15, l = 5) 
+    )
+  
+
+  # X-axis logic
+  if(!show_x) {
+    p <- p + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  } else {
+    p <- p + theme(axis.text.x = element_text(size = 16, face = "bold", color = "black"))
+  }
+  
+  # Y-axis logic
+  if(!show_y) {
+    p <- p + theme(axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())
+  } else {
+    p <- p + theme(axis.title.y = element_text(size = 18, face = "bold"),
+                   axis.text.y = element_text(size = 16, face = "bold", color = "black"))
+  }
+  return(p)
+}
+
+# Generate Panels
+pA <- create_sq_plot("Days_16C", "Total days > 16°C", "A)", FALSE, TRUE, "Mean total days annually", max_total) + theme(axis.title.x = element_blank())
+pB <- create_sq_plot("Days_18C", "Total days > 18°C", "B)", FALSE, FALSE, "", max_total) + theme(axis.title.x = element_blank())
+
+pC <- create_sq_plot("Days_20C", "Total days > 20°C", "C)", FALSE, FALSE, "", max_total) + theme(axis.title.x = element_blank())
+
+
+pD <- create_sq_plot("Consec_16C", "Consec. days > 16°C", "D)", TRUE, TRUE, "Mean maximum consecutive days", max_consec)
+pE <- create_sq_plot("Consec_18C", "Consec. days > 18°C", "E)", TRUE, FALSE, "", max_consec)
+pF <- create_sq_plot("Consec_20C", "Consec. days > 20°C", "F)", TRUE, FALSE, "", max_consec)
+
+# 6. Final Assembly with Spacing
+combined_output <- (pA | pB | pC) / (pD | pE | pF)
+
+final_plot <- combined_output + 
+  plot_layout(guides = "collect") + 
+  plot_annotation(
+    title = "Figure 3: Thermal stress threshold analysis: Pre-fire vs. post-fire",
+    theme = theme(
+      plot.title = element_text(size = 26, face = "bold"),
+      plot.subtitle = element_text(size = 18, face = "italic")
+    )
+  ) & 
+  theme(
+    legend.position = "bottom", 
+    legend.text = element_text(size = 18, face = "bold"),
+    legend.title = element_blank()
+  )
+
+
+ggsave(
+  filename = "Figure3_Temperature_Magnitude_v7.png", 
+  plot = final_plot, 
+  width = 14, 
+  height = 12, 
+  units = "in", 
+  dpi = 300
+)
+
+
+
+final_plot
+```
+
+# Timing shift visualization: Boxplot of julian days
+Visualizing the timing shift of "peak heat" is a way to examine the loss of thermal buffering in the watershed. Following wildfire, the removal of riparian canopy often causes the stream to track solar radiation more closely, frequently shifting the MWMT (Maximum Weekly Maximum Temperature) to an earlier date in the summer. In our case, it appears there was a differential shift in the tributaries relative to the mainstem - this is counter to my expectation based on wildfire burn intensity in the basin (in fact we may want to investigate how these two things are correlated)?
+
+```{r timing shift plot, fig.height = 8, fig.width = 11}
+# Calculate the Delta (Mean Change)
+timing_deltas <- annual_metrics %>%
+  filter(year != 2020) %>% #Excludes 2020 fire year
+  group_by(site, period) %>%
+  summarise(mean_doy = mean(MWMT_DOY, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = period, values_from = mean_doy) %>%
+  mutate(
+    delta = `Post-Fire` - `Pre-Fire`,
+    label = paste0("Δ = ", round(delta, 1), " days"),
+    y_pos = 155  # this controls y_position of the delta values
+  )
+
+# Update Factor Order
+annual_metrics <- annual_metrics %>%
+  mutate(site = factor(site, levels = c("SC1", "SC2", "BC", "MC", "SC3")))
+
+# Plot with bottom-aligned Delta annotations
+timing_plot <- ggplot(annual_metrics, aes(x = site, y = MWMT_DOY)) +
+  # Boxplots and Jitter
+  geom_boxplot(aes(fill = period), outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(aes(fill = period), position = position_dodge(width = 0.75), 
+              alpha = 0.4, size = 2.5, shape = 21, color = "black") +
+  
+  # Add Delta Labels just above the Site Codes
+  geom_text(data = timing_deltas, aes(x = site, y = y_pos, label = label),
+            fontface = "bold", size = 5, color = "black") +
+
+  # Scale and color formatting
+  scale_fill_manual(values = c("Pre-Fire" = "#0072B2", "Post-Fire" = "#E69F00")) +
+  scale_y_continuous(
+    limits = c(152, 304), 
+    breaks = c(152, 182, 213, 244, 274, 304),
+    labels = c("June 1", "July 1", "Aug 1", "Sept 1", "Oct 1", "Oct 31")
+  ) +
+  
+  # Labels and theme
+  labs(
+    title = "Figure 4. Shift in timing of peak thermal conditions (MWMT)",
+    subtitle = "Delta (Δ) represents the mean change in days from Pre- to Post-Fire",
+    y = "Date of peak temperature (MWMT)",
+    x = "Site"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text = element_text(size = 16, face = "bold", color = "black"),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.line = element_line(linewidth = 1),
+    legend.position = c(0.98, 0.98),
+    legend.justification = c("right", "top"),
+    legend.background = element_rect(fill = alpha("white", 0.7), color = "black"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 14, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold")
+  )
+
+ggsave(
+  filename = "Figure4_Temperature_timing3.png", 
+  plot = timing_plot, 
+  width = 14, 
+  height = 8, 
+  units = "in", 
+  dpi = 300
+)
+```
